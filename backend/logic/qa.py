@@ -8,11 +8,10 @@ async def ask_character(agent, question: str, memory):
     memory_text = "\n".join(
         f"{entry['speaker']}: {entry['content']}" for entry in memory.get()
     )
-    # prompt = f"{system_prompt}\n\n{memory_text}\n\n{agent.name}, reply directly to the detective's question:\n\"{question}\""
     prompt = f"{system_prompt}\n\nPrevious conversation:\n{memory_text}\n\nNow reply ONLY as {agent.name} to this question: \"{question}\"\n\nDo not include any detective dialogue or questions in your response."
 
     # === Get character's response ===
-    response = openai.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
@@ -40,7 +39,7 @@ Reply: {answer}
 """
 
     try:
-        clue_response = openai.chat.completions.create(
+        clue_response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": clue_prompt}],
             temperature=0.4,
