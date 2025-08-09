@@ -3,9 +3,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from backend.agents.profiles import create_bellamy, create_holloway, create_tommy, create_perpetrator
-from backend.logic.memory import Memory
-from backend.logic.qa import ask_character
+from agents.profiles import create_bellamy, create_holloway, create_tommy, create_perpetrator
+from logic.memory import Memory
+from logic.qa import ask_character
 import os
 from dotenv import load_dotenv
 import openai
