@@ -1,4 +1,4 @@
-from backend.logic.memory import Memory
+from logic.memory import Memory
 
 class Character:
     def __init__(self, name, role, system_prompt):
