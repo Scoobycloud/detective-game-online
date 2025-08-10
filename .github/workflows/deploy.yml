@@ -1,0 +1,21 @@
+name: Deploy Backend (Render Hook)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "backend/**"
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Render Deploy Hook
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not set as a repository secret" >&2
+            exit 1
+          fi
+          curl -X POST -s -S "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+
