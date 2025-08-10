@@ -29,6 +29,10 @@ except Exception:
         from db import room_exists as db_room_exists
     except Exception:
         db_room_exists = None  # type: ignore
+    try:
+        from db import debug_status as db_debug_status
+    except Exception:
+        db_debug_status = None  # type: ignore
 
 # === Load environment and API Key ===
 load_dotenv()
@@ -89,6 +93,15 @@ async def get_room_clues(code: str):
     if not room:
         return {"error": "Room not found"}
     return room["memory"].get_clues()
+
+@app.get("/debug/supabase")
+async def debug_supabase():
+    try:
+        if 'db_debug_status' in globals() and db_debug_status:
+            return db_debug_status()
+        return {"configured": False}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/murderer")
 async def get_murderer_page():
@@ -193,9 +206,10 @@ async def create_room(sid, data):
     }
     # Persist room creation (best-effort)
     try:
-        db_create_room(code)
-    except Exception:
-        pass
+        ok, info = db_create_room(code)
+        log.info(f"DB create_room ok={ok} info={info}")
+    except Exception as e:
+        log.info(f"DB create_room failed: {e}")
     log.info(f"ROOM CREATED {code}")
     await sio.emit("room_created", {"room": code}, room=sid)
 
@@ -235,17 +249,19 @@ async def join_role(sid, data):
         log.info(f"Detective connected: {sid}")
         await sio.emit("system", {"msg": "Detective joined."}, room=sid)
         try:
-            db_add_room_member(room_code, "detective")
-        except Exception:
-            pass
+            ok, info = db_add_room_member(room_code, "detective")
+            log.info(f"DB add_room_member(det) ok={ok} info={info}")
+        except Exception as e:
+            log.info(f"DB add_room_member(det) failed: {e}")
     elif role == "murderer":
         room["murderer_sid"] = sid
         log.info(f"Murderer connected: {sid}")
         await sio.emit("system", {"msg": "Murderer joined."}, room=sid)
         try:
-            db_add_room_member(room_code, "murderer")
-        except Exception:
-            pass
+            ok, info = db_add_room_member(room_code, "murderer")
+            log.info(f"DB add_room_member(mur) ok={ok} info={info}")
+        except Exception as e:
+            log.info(f"DB add_room_member(mur) failed: {e}")
     else:
         log.info(f"Unknown role: {role}")
         await sio.emit("error", {"msg": "Unknown role"}, room=sid)
