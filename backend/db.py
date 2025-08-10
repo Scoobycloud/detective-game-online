@@ -59,3 +59,15 @@ def add_room_member(code: str, role: str, user_id: Optional[str] = None) -> None
         print("DB add_room_member warning:", e)
 
 
+def room_exists(code: str) -> bool:
+    if not supabase:
+        return False
+    try:
+        res = supabase.table("rooms").select("code").eq("code", code).limit(1).execute()
+        items = getattr(res, "data", None) or getattr(res, "json", {}).get("data") or []
+        return bool(items)
+    except Exception as e:
+        print("DB room_exists warning:", e)
+        return False
+
+

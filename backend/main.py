@@ -24,6 +24,10 @@ try:
     from .db import create_room as db_create_room, add_room_member as db_add_room_member
 except Exception:
     from db import create_room as db_create_room, add_room_member as db_add_room_member
+    try:
+        from db import room_exists as db_room_exists
+    except Exception:
+        db_room_exists = None  # type: ignore
 
 # === Load environment and API Key ===
 load_dotenv()
@@ -196,7 +200,22 @@ async def join_role(sid, data):
     if not role or not room_code:
         return await sio.emit("error", {"msg": "Missing role or room."}, room=sid)
     if room_code not in ROOMS:
-        return await sio.emit("error", {"msg": "Room not found."}, room=sid)
+        # Try to hydrate from DB (in case process restarted)
+        hydrated = False
+        try:
+            if 'db_room_exists' in globals() and db_room_exists and db_room_exists(room_code):
+                ROOMS[room_code] = {
+                    "detective_sid": None,
+                    "murderer_sid": None,
+                    "human_character": None,
+                    "memory": Memory(),
+                }
+                hydrated = True
+                print(f"Hydrated room {room_code} from DB")
+        except Exception as e:
+            print("Room hydration failed:", e)
+        if not hydrated:
+            return await sio.emit("error", {"msg": "Room not found."}, room=sid)
 
     room = ROOMS[room_code]
     await maybe_await(sio.save_session(sid, {"role": role, "room": room_code}))
