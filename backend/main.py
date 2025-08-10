@@ -139,6 +139,7 @@ def generate_room_code(length: int = 6) -> str:
 
 # correlation_id -> asyncio.Future for murderer replies
 PENDING: Dict[str, asyncio.Future] = {}
+HUMAN_REPLY_TIMEOUT_SECONDS = int(os.getenv("HUMAN_REPLY_TIMEOUT_SECONDS", "120"))
 
 # very simple matchmaking queues
 WAITING: Dict[str, set[str]] = {
@@ -354,7 +355,7 @@ async def ask(sid, data):
             room=room["murderer_sid"],
         )
         try:
-            answer = await asyncio.wait_for(fut, timeout=40)
+            answer = await asyncio.wait_for(fut, timeout=HUMAN_REPLY_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             # fallback to AI if murderer is silent
             log.info("Timeout, falling back to AI")
@@ -393,5 +394,14 @@ async def murderer_answer(sid, data):
     fut = PENDING.get(corr_id)
     if fut and not fut.done():
         fut.set_result(ans)
+
+@sio.event
+async def murderer_ack(sid, data):
+    """
+    Optional debug ACK from murderer client when a question is received.
+    data: {"correlation_id": "..."}
+    """
+    corr_id = (data or {}).get("correlation_id")
+    log.info(f"MURDERER_ACK sid={sid} corr_id={corr_id}")
 
 # ci: trigger render deploy
