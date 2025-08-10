@@ -17,6 +17,7 @@ import uuid
 import random
 import string
 from typing import Dict, Any, Optional
+import inspect
 
 try:
     # Support both package and local run
@@ -114,6 +115,11 @@ async def ask(request: Request):
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
+async def maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
 def generate_room_code(length: int = 6) -> str:
     alphabet = string.ascii_uppercase + string.digits
     return "".join(random.choice(alphabet) for _ in range(length))
@@ -138,7 +144,7 @@ async def connect(sid, environ):
 @sio.event
 async def disconnect(sid):
     print("Socket disconnected:", sid)
-    session = await sio.get_session(sid) if hasattr(sio, "get_session") else {}
+    session = await maybe_await(sio.get_session(sid)) if hasattr(sio, "get_session") else {}
     room_code = (session or {}).get("room")
     role = (session or {}).get("role")
     if room_code and room_code in ROOMS:
@@ -189,8 +195,8 @@ async def join_role(sid, data):
         return await sio.emit("error", {"msg": "Room not found."}, room=sid)
 
     room = ROOMS[room_code]
-    await sio.save_session(sid, {"role": role, "room": room_code})
-    await sio.enter_room(sid, room_code)
+    await maybe_await(sio.save_session(sid, {"role": role, "room": room_code}))
+    await maybe_await(sio.enter_room(sid, room_code))
     if role == "detective":
         room["detective_sid"] = sid
         print(f"Detective connected: {sid}")
@@ -248,7 +254,7 @@ async def set_human_character(sid, data):
     Murderer picks which character they 'possess'
     data: {"character": "Mr. Holloway"}
     """
-    session = await sio.get_session(sid)
+    session = await maybe_await(sio.get_session(sid))
     room_code = session.get("room")
     if not room_code or room_code not in ROOMS:
         return await sio.emit("error", {"msg": "No room for session."}, room=sid)
@@ -270,7 +276,7 @@ async def ask(sid, data):
     Detective asks a question (multiplayer path).
     data: {"character": "Mrs. Bellamy", "question": "Where were you?"}
     """
-    session = await sio.get_session(sid)
+    session = await maybe_await(sio.get_session(sid))
     room_code = session.get("room")
     if not room_code or room_code not in ROOMS:
         return await sio.emit("error", {"msg": "No room for session."}, room=sid)
@@ -330,7 +336,7 @@ async def murderer_answer(sid, data):
     Murderer replies to a pending question.
     data: {"correlation_id": "...", "answer": "text"}
     """
-    session = await sio.get_session(sid)
+    session = await maybe_await(sio.get_session(sid))
     room_code = session.get("room")
     if not room_code or room_code not in ROOMS:
         return await sio.emit("error", {"msg": "No room for session."}, room=sid)
