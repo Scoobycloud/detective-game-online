@@ -138,7 +138,7 @@ def find_character(name: str):
     return next((c for c in characters if c.name == name), None)
 
 def normalize_name(name: str | None) -> str:
-    return (name or "").strip()
+    return (name or "").strip().lower()
 
 @sio.event
 async def connect(sid, environ):
@@ -303,6 +303,15 @@ async def ask(sid, data):
         return await sio.emit("error", {"msg": "Missing character or question."}, room=sid)
 
     print(f"Question for {character}: {question}")
+    print(
+        "Routing check:",
+        {
+            "room_human": normalize_name(room.get("human_character")),
+            "incoming": normalize_name(character),
+            "match": normalize_name(room.get("human_character")) == normalize_name(character),
+            "has_murderer": bool(room.get("murderer_sid")),
+        },
+    )
 
     # If human controls this character, forward to murderer and await reply
     if normalize_name(room.get("human_character")) == normalize_name(character) and room.get("murderer_sid"):
