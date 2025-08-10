@@ -137,6 +137,9 @@ WAITING: Dict[str, set[str]] = {
 def find_character(name: str):
     return next((c for c in characters if c.name == name), None)
 
+def normalize_name(name: str | None) -> str:
+    return (name or "").strip()
+
 @sio.event
 async def connect(sid, environ):
     print("Socket connected:", sid)
@@ -302,7 +305,7 @@ async def ask(sid, data):
     print(f"Question for {character}: {question}")
 
     # If human controls this character, forward to murderer and await reply
-    if room.get("human_character") == character and room.get("murderer_sid"):
+    if normalize_name(room.get("human_character")) == normalize_name(character) and room.get("murderer_sid"):
         print(f"Forwarding to human murderer for {character}")
         corr_id = uuid.uuid4().hex
         fut = asyncio.get_event_loop().create_future()
