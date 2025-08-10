@@ -109,6 +109,7 @@ async def ask(request: Request):
 
 # ============================
 #   Socket.IO (Multiplayer)
+#   CI test change: no-op comment to trigger deploy
 # ============================
 
 # Socket server mounted *around* FastAPI so both HTTP + WS work
