@@ -267,8 +267,11 @@ async def set_human_character(sid, data):
     if not find_character(name):
         return await sio.emit("error", {"msg": f"No character named {name}."}, room=sid)
 
+    print(f"SET_HUMAN_CHARACTER: room={room_code} sid={sid} name={name}")
     room["human_character"] = name
-    # You might hide this broadcast in a real game; for now it's helpful
+    # Confirm to murderer only
+    await sio.emit("character_locked", {"character": name}, room=sid)
+    # Optional broadcast (filtered client-side)
     await sio.emit("system", {"msg": f"Human now controls: {name}."}, room=room_code)
 
 @sio.event
