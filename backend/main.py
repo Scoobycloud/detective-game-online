@@ -8,6 +8,7 @@ from logic.memory import Memory
 from logic.qa import ask_character
 import os
 from dotenv import load_dotenv
+import logging
 import openai
 
 # === NEW: sockets bits ===
@@ -31,6 +32,7 @@ except Exception:
 
 # === Load environment and API Key ===
 load_dotenv()
+log = logging.getLogger("uvicorn.error")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 print("Loaded API Key:", openai.api_key[:5] + "..." if openai.api_key else "None")
 
@@ -117,7 +119,13 @@ async def ask(request: Request):
 # ============================
 
 # Socket server mounted *around* FastAPI so both HTTP + WS work
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+sio_debug = os.getenv("SIO_DEBUG", "1") == "1"
+sio = socketio.AsyncServer(
+    async_mode="asgi",
+    cors_allowed_origins="*",
+    logger=sio_debug,
+    engineio_logger=sio_debug,
+)
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 async def maybe_await(value):
@@ -146,12 +154,12 @@ def normalize_name(name: str | None) -> str:
 
 @sio.event
 async def connect(sid, environ):
-    print("Socket connected:", sid)
-    print(f"Connection from: {environ.get('HTTP_USER_AGENT', 'Unknown')}")
+    log.info(f"Socket connected: {sid}")
+    log.info(f"Connection from: {environ.get('HTTP_USER_AGENT', 'Unknown')}")
 
 @sio.event
 async def disconnect(sid):
-    print("Socket disconnected:", sid)
+    log.info(f"Socket disconnected: {sid}")
     session = await maybe_await(sio.get_session(sid)) if hasattr(sio, "get_session") else {}
     room_code = (session or {}).get("room")
     role = (session or {}).get("role")
@@ -187,6 +195,7 @@ async def create_room(sid, data):
         db_create_room(code)
     except Exception:
         pass
+    log.info(f"ROOM CREATED {code}")
     await sio.emit("room_created", {"room": code}, room=sid)
 
 @sio.event
@@ -196,7 +205,7 @@ async def join_role(sid, data):
     """
     role = (data or {}).get("role")
     room_code = (data or {}).get("room")
-    print(f"JOIN_ROLE: {sid} joining as {role} in room {room_code}")
+    log.info(f"JOIN_ROLE: sid={sid} role={role} room={room_code}")
     if not role or not room_code:
         return await sio.emit("error", {"msg": "Missing role or room."}, room=sid)
     if room_code not in ROOMS:
@@ -222,7 +231,7 @@ async def join_role(sid, data):
     await maybe_await(sio.enter_room(sid, room_code))
     if role == "detective":
         room["detective_sid"] = sid
-        print(f"Detective connected: {sid}")
+        log.info(f"Detective connected: {sid}")
         await sio.emit("system", {"msg": "Detective joined."}, room=sid)
         try:
             db_add_room_member(room_code, "detective")
@@ -230,14 +239,14 @@ async def join_role(sid, data):
             pass
     elif role == "murderer":
         room["murderer_sid"] = sid
-        print(f"Murderer connected: {sid}")
+        log.info(f"Murderer connected: {sid}")
         await sio.emit("system", {"msg": "Murderer joined."}, room=sid)
         try:
             db_add_room_member(room_code, "murderer")
         except Exception:
             pass
     else:
-        print(f"Unknown role: {role}")
+        log.info(f"Unknown role: {role}")
         await sio.emit("error", {"msg": "Unknown role"}, room=sid)
 
 @sio.event
@@ -289,7 +298,7 @@ async def set_human_character(sid, data):
     if not find_character(name):
         return await sio.emit("error", {"msg": f"No character named {name}."}, room=sid)
 
-    print(f"SET_HUMAN_CHARACTER: room={room_code} sid={sid} name={name}")
+    log.info(f"SET_HUMAN_CHARACTER: room={room_code} sid={sid} name={name}")
     room["human_character"] = name
     # Confirm to murderer only
     await sio.emit("character_locked", {"character": name}, room=sid)
@@ -307,10 +316,10 @@ async def ask(sid, data):
     if not room_code or room_code not in ROOMS:
         return await sio.emit("error", {"msg": "No room for session."}, room=sid)
     room = ROOMS[room_code]
-    print(f"ASK event from {sid} in room {room_code}")
-    print(f"Detective SID: {room.get('detective_sid')}")
-    print(f"Murderer SID: {room.get('murderer_sid')}")
-    print(f"Human character: {room.get('human_character')}")
+    log.info(f"ASK event from {sid} in room {room_code}")
+    log.info(f"Detective SID: {room.get('detective_sid')}")
+    log.info(f"Murderer SID: {room.get('murderer_sid')}")
+    log.info(f"Human character: {room.get('human_character')}")
     
     if sid != room.get("detective_sid"):
         print(f"ERROR: {sid} is not detective")
@@ -321,20 +330,21 @@ async def ask(sid, data):
     if not character or not question:
         return await sio.emit("error", {"msg": "Missing character or question."}, room=sid)
 
-    print(f"Question for {character}: {question}")
-    print(
-        "Routing check:",
+    log.info(f"Question for {character}: {question}")
+    log.info(
         {
-            "room_human": normalize_name(room.get("human_character")),
-            "incoming": normalize_name(character),
-            "match": normalize_name(room.get("human_character")) == normalize_name(character),
-            "has_murderer": bool(room.get("murderer_sid")),
-        },
+            "routing_check": {
+                "room_human": normalize_name(room.get("human_character")),
+                "incoming": normalize_name(character),
+                "match": normalize_name(room.get("human_character")) == normalize_name(character),
+                "has_murderer": bool(room.get("murderer_sid")),
+            }
+        }
     )
 
     # If human controls this character, forward to murderer and await reply
     if normalize_name(room.get("human_character")) == normalize_name(character) and room.get("murderer_sid"):
-        print(f"Forwarding to human murderer for {character}")
+        log.info(f"Forwarding to human murderer for {character}")
         corr_id = uuid.uuid4().hex
         fut = asyncio.get_event_loop().create_future()
         PENDING[corr_id] = fut
@@ -347,14 +357,14 @@ async def ask(sid, data):
             answer = await asyncio.wait_for(fut, timeout=40)
         except asyncio.TimeoutError:
             # fallback to AI if murderer is silent
-            print("Timeout, falling back to AI")
+            log.info("Timeout, falling back to AI")
             agent = find_character(character)
             answer = await ask_character(agent, question, room["memory"])
         finally:
             PENDING.pop(corr_id, None)
     else:
         # AI handles it
-        print(f"Using AI for {character}")
+        log.info(f"Using AI for {character}")
         agent = find_character(character)
         answer = await ask_character(agent, question, room["memory"])
 
