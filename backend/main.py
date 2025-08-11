@@ -233,7 +233,7 @@ async def join_role(sid, data):
     """
     role = (data or {}).get("role")
     room_code = (data or {}).get("room")
-    id_token = (data or {}).get("idToken")
+    id_token = (data or {}).get("idToken") or (data or {}).get("token")
     log.info(f"JOIN_ROLE: sid={sid} role={role} room={room_code}")
     if not role or not room_code:
         return await sio.emit("error", {"msg": "Missing role or room."}, room=sid)
