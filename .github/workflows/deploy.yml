@@ -1,15 +1,24 @@
 name: Deploy Backend (Render Hook)
 
 on:
-  push:
-    branches: [ "main" ]
-    paths:
-      - "backend/**"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for deployment"
+        required: false
+        type: string
 
 jobs:
   trigger-deploy:
     runs-on: ubuntu-latest
+    environment: production
     steps:
+      - name: Confirm manual deploy
+        run: |
+          echo "Manual deploy to Render triggered."
+          if [ -n "${{ github.event.inputs.reason }}" ]; then
+            echo "Reason: ${{ github.event.inputs.reason }}"
+          fi
       - name: Call Render Deploy Hook
         run: |
           if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
