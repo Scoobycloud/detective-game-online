@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 
 try:
     from supabase import create_client, Client
@@ -95,4 +95,89 @@ def debug_status() -> Dict[str, Any]:
         "can_read": can_read,
     }
 
+
+
+# ==============================
+# Optional: transcripts and clues
+# ==============================
+
+def add_transcript_entry(
+    room_code: str,
+    speaker: str,
+    content: str,
+    character: Optional[str] = None,
+    correlation_id: Optional[str] = None,
+) -> Tuple[bool, Optional[str]]:
+    """Insert a transcript row if the table exists.
+    Expected schema: transcript(id uuid pk, room_code text, speaker text, character text null, content text, correlation_id text null, created_at timestamp default now())
+    """
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("transcript")
+            .insert(
+                {
+                    "room_code": room_code,
+                    "speaker": speaker,
+                    "character": character,
+                    "content": content,
+                    "correlation_id": correlation_id,
+                }
+            )
+            .execute()
+        )
+        data = getattr(res, "data", None)
+        return True, f"inserted:{len(data) if data is not None else 'unknown'}"
+    except Exception as e:
+        print("DB add_transcript_entry warning:", e)
+        return False, str(e)
+
+
+def add_clue(
+    room_code: str,
+    text: str,
+    clue_type: str,
+    source: Optional[str] = None,
+    timestamp: Optional[str] = None,
+) -> Tuple[bool, Optional[str]]:
+    """Insert a clue row if the table exists.
+    Expected schema: clues(id uuid pk, room_code text, text text, type text, source text, timestamp text, created_at timestamp default now())
+    """
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        payload: Dict[str, Any] = {
+            "room_code": room_code,
+            "text": text,
+            "type": clue_type,
+            "source": source,
+        }
+        if timestamp:
+            payload["timestamp"] = timestamp
+        res = supabase.table("clues").insert(payload).execute()
+        data = getattr(res, "data", None)
+        return True, f"inserted:{len(data) if data is not None else 'unknown'}"
+    except Exception as e:
+        print("DB add_clue warning:", e)
+        return False, str(e)
+
+
+def get_clues_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    """Fetch clues for a room; returns (ok, list)."""
+    if not supabase:
+        return False, []
+    try:
+        res = (
+            supabase.table("clues")
+            .select("text,type,source,timestamp,created_at")
+            .eq("room_code", room_code)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        data = getattr(res, "data", []) or []
+        return True, data  # type: ignore
+    except Exception as e:
+        print("DB get_clues_for_room warning:", e)
+        return False, []
 

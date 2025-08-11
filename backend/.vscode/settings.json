@@ -1,0 +1,9 @@
+{
+  "python.defaultInterpreterPath": "/Users/ianpatterson/Projects/detective_game/.venv/bin/python",
+  "editor.formatOnSave": true,
+  "python.analysis.typeCheckingMode": "basic",
+  "files.exclude": {
+    "**/.venv": true,
+    "**/__pycache__": true
+  }
+}

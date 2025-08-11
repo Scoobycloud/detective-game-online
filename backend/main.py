@@ -5,11 +5,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from agents.profiles import create_bellamy, create_holloway, create_tommy, create_perpetrator
 from logic.memory import Memory
-from logic.qa import ask_character
+from logic.qa import ask_character, extract_clues_from_reply
 import os
 from dotenv import load_dotenv
 import logging
 import openai
+import json
 
 # === NEW: sockets bits ===
 import socketio
@@ -35,9 +36,21 @@ except Exception:
 
 try:
     # Support both package and local run
-    from .db import create_room as db_create_room, add_room_member as db_add_room_member
+    from .db import (
+        create_room as db_create_room,
+        add_room_member as db_add_room_member,
+        add_transcript_entry as db_add_transcript_entry,
+        add_clue as db_add_clue,
+        get_clues_for_room as db_get_clues_for_room,
+    )
 except Exception:
-    from db import create_room as db_create_room, add_room_member as db_add_room_member
+    from db import (
+        create_room as db_create_room,
+        add_room_member as db_add_room_member,
+        add_transcript_entry as db_add_transcript_entry,
+        add_clue as db_add_clue,
+        get_clues_for_room as db_get_clues_for_room,
+    )
     try:
         from db import room_exists as db_room_exists
     except Exception:
@@ -102,6 +115,14 @@ async def get_clues():
 
 @app.get("/rooms/{code}/clues")
 async def get_room_clues(code: str):
+    # Prefer DB if available, fall back to in-memory
+    try:
+        if 'db_get_clues_for_room' in globals() and db_get_clues_for_room:
+            ok, items = db_get_clues_for_room(code)
+            if ok and items:
+                return items
+    except Exception as e:
+        print("/rooms/{code}/clues DB read failed:", e)
     room = ROOMS.get(code)
     if not room:
         return {"error": "Room not found"}
@@ -382,6 +403,16 @@ async def ask(sid, data):
         }
     )
 
+    # Record question in transcript (best-effort)
+    try:
+        if 'db_add_transcript_entry' in globals() and db_add_transcript_entry:
+            db_add_transcript_entry(room_code, "Detective", question, character=character)
+    except Exception as e:
+        log.info(f"DB add_transcript_entry(question) failed: {e}")
+
+    # Track clues before answering to compute delta
+    before_len = len(room["memory"].get_clues())
+
     # If human controls this character, forward to murderer and await reply
     if normalize_name(room.get("human_character")) == normalize_name(character) and room.get("murderer_sid"):
         log.info(f"Forwarding to human murderer for {character}")
@@ -402,6 +433,9 @@ async def ask(sid, data):
             answer = await ask_character(agent, question, room["memory"])
         finally:
             PENDING.pop(corr_id, None)
+        # Extract clues from human reply and add to memory
+        if answer:
+            await extract_clues_from_reply(character, answer, room["memory"])  # best-effort
     else:
         # AI handles it
         log.info(f"Using AI for {character}")
@@ -411,6 +445,29 @@ async def ask(sid, data):
     # Send answer back to detective
     if room.get("detective_sid"):
         await sio.emit("answer", {"character": character, "answer": answer}, room=room["detective_sid"])
+
+    # Record answer in transcript (best-effort)
+    try:
+        if 'db_add_transcript_entry' in globals() and db_add_transcript_entry:
+            db_add_transcript_entry(room_code, character, answer, character=character)
+    except Exception as e:
+        log.info(f"DB add_transcript_entry(answer) failed: {e}")
+
+    # Persist any new clues to DB
+    try:
+        if 'db_add_clue' in globals() and db_add_clue:
+            after_clues = room["memory"].get_clues()
+            new_items = after_clues[before_len:]
+            for c in new_items:
+                db_add_clue(
+                    room_code,
+                    text=c.get("text", ""),
+                    clue_type=c.get("type", "FACT"),
+                    source=c.get("source"),
+                    timestamp=c.get("timestamp"),
+                )
+    except Exception as e:
+        log.info(f"DB add_clue batch failed: {e}")
 
     # Tell clients to refresh clues (your GUI will still call GET /clues)
     await sio.emit("clues_updated", {}, room=room_code)

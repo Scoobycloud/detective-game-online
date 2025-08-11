@@ -57,3 +57,39 @@ Reply: {answer}
         print("Failed to extract or parse clues:", e)
 
     return answer
+
+
+async def extract_clues_from_reply(agent_name: str, reply: str, memory):
+    """
+    Parse a character's reply to extract structured clues and add them to memory.
+    Mirrors the extraction logic used in ask_character.
+    """
+    import json
+    import openai
+
+    clue_prompt = f"""Extract all potential clues from the following reply. 
+Label each clue as either "important", "background", or "gossip" depending on how relevant and actionable it is to a murder investigation.
+Reply in JSON format as a list of objects like this:
+[
+  {{"text": "She heard a loud thud around 9am", "type": "important"}},
+  {{"text": "She was watering plants", "type": "background"}},
+  {{"text": "She thinks the victim was grumpy", "type": "gossip"}}
+]
+
+Reply: {reply}
+"""
+
+    try:
+        clue_response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": clue_prompt}],
+            temperature=0.4,
+        )
+        parsed = json.loads(clue_response.choices[0].message.content.strip())
+        for clue in parsed:
+            text = clue.get("text", "").strip()
+            clue_type = clue.get("type", "fact").upper()
+            if text:
+                memory.add_clue(text, clue_type=clue_type, source=agent_name)
+    except Exception as e:  # pragma: no cover
+        print("Failed to extract or parse clues (standalone):", e)
