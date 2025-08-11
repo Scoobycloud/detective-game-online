@@ -19,6 +19,19 @@ import random
 import string
 from typing import Dict, Any, Optional
 import inspect
+# === Firebase Admin (optional) ===
+try:
+    import firebase_admin
+    from firebase_admin import auth as fb_auth, credentials as fb_credentials
+    _fb_app = None
+    if not firebase_admin._apps:
+        fb_creds_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if fb_creds_json:
+            _fb_app = firebase_admin.initialize_app(fb_credentials.Certificate(json.loads(fb_creds_json)))
+except Exception:
+    firebase_admin = None  # type: ignore
+    fb_auth = None  # type: ignore
+    _fb_app = None
 
 try:
     # Support both package and local run
@@ -220,6 +233,7 @@ async def join_role(sid, data):
     """
     role = (data or {}).get("role")
     room_code = (data or {}).get("room")
+    id_token = (data or {}).get("idToken")
     log.info(f"JOIN_ROLE: sid={sid} role={role} room={room_code}")
     if not role or not room_code:
         return await sio.emit("error", {"msg": "Missing role or room."}, room=sid)
@@ -241,15 +255,24 @@ async def join_role(sid, data):
         if not hydrated:
             return await sio.emit("error", {"msg": "Room not found."}, room=sid)
 
+    # Verify Firebase token if provided
+    user_id: Optional[str] = None
+    if id_token and fb_auth:
+        try:
+            decoded = fb_auth.verify_id_token(id_token)
+            user_id = decoded.get("uid")
+        except Exception as e:
+            log.info(f"Firebase token verification failed: {e}")
+
     room = ROOMS[room_code]
-    await maybe_await(sio.save_session(sid, {"role": role, "room": room_code}))
+    await maybe_await(sio.save_session(sid, {"role": role, "room": room_code, "user_id": user_id}))
     await maybe_await(sio.enter_room(sid, room_code))
     if role == "detective":
         room["detective_sid"] = sid
         log.info(f"Detective connected: {sid}")
         await sio.emit("system", {"msg": "Detective joined."}, room=sid)
         try:
-            ok, info = db_add_room_member(room_code, "detective")
+            ok, info = db_add_room_member(room_code, "detective", user_id=user_id)
             log.info(f"DB add_room_member(det) ok={ok} info={info}")
         except Exception as e:
             log.info(f"DB add_room_member(det) failed: {e}")
@@ -258,7 +281,7 @@ async def join_role(sid, data):
         log.info(f"Murderer connected: {sid}")
         await sio.emit("system", {"msg": "Murderer joined."}, room=sid)
         try:
-            ok, info = db_add_room_member(room_code, "murderer")
+            ok, info = db_add_room_member(room_code, "murderer", user_id=user_id)
             log.info(f"DB add_room_member(mur) ok={ok} info={info}")
         except Exception as e:
             log.info(f"DB add_room_member(mur) failed: {e}")
