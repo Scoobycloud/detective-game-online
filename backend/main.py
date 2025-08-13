@@ -42,6 +42,7 @@ try:
         add_transcript_entry as db_add_transcript_entry,
         add_clue as db_add_clue,
         get_clues_for_room as db_get_clues_for_room,
+        get_character_profile as db_get_character_profile,
     )
 except Exception:
     from db import (
@@ -50,6 +51,7 @@ except Exception:
         add_transcript_entry as db_add_transcript_entry,
         add_clue as db_add_clue,
         get_clues_for_room as db_get_clues_for_room,
+        get_character_profile as db_get_character_profile,
     )
     try:
         from db import room_exists as db_room_exists
@@ -108,6 +110,20 @@ async def startup_event():
 @app.get("/characters")
 async def get_characters():
     return [char.name for char in characters]
+
+@app.get("/characters/{name}/profile")
+async def get_character_profile_http(name: str):
+    try:
+        if 'db_get_character_profile' in globals() and db_get_character_profile:
+            ok, profile = db_get_character_profile(name)
+            if not ok:
+                return {"error": "db_unavailable"}
+            if not profile:
+                return {"error": "not_found"}
+            return profile
+    except Exception as e:
+        return {"error": str(e)}
+    return {"error": "not_configured"}
 
 @app.get("/clues")
 async def get_clues():

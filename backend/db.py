@@ -181,3 +181,26 @@ def get_clues_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
         print("DB get_clues_for_room warning:", e)
         return False, []
 
+
+def get_character_profile(name: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Fetch a character's police profile from Supabase.
+    Expected table: character_profiles(name text pk, dob text, address text, image_url text, record text)
+    """
+    if not supabase:
+        return False, None
+    try:
+        res = (
+            supabase.table("character_profiles")
+            .select("name,dob,address,image_url,record")
+            .ilike("name", name)
+            .limit(1)
+            .execute()
+        )
+        data = getattr(res, "data", []) or []
+        if not data:
+            return True, None
+        return True, data[0]
+    except Exception as e:
+        print("DB get_character_profile warning:", e)
+        return False, None
+
