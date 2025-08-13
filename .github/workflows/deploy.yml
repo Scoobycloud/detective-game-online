@@ -7,6 +7,10 @@ on:
         description: "Reason for deployment"
         required: false
         type: string
+  push:
+    branches: [ "main" ]
+    paths:
+      - "backend/**"
 
 jobs:
   trigger-deploy:
