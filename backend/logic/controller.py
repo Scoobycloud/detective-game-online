@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, List
 
 try:
     # local import pattern
@@ -84,5 +84,156 @@ async def postprocess_human_answer(
         pass
 
     # TODO: future: detect contradictions vs case summary and insert 'contradiction' evidence
+
+
+async def generate_structured_answer(
+    room_code: str,
+    character_agent: Any,
+    character_name: str,
+    question: str,
+    memory: Any,
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Ask the character with an enriched prompt that requests STRICT JSON with ops.
+    Returns (answer, ops_dict)
+    ops_dict schema (partial):
+      {
+        "clues": [{"text": str, "type": "IMPORTANT" | "CONTRADICTION"}],
+        "evidence_ops": [{"op": "insert", "title": str, "type": str, "location": str, "notes": str} | {"op": "discover", "location": str}],
+        "timeline_ops": [{"tstamp": str, "phase": str, "label": str, "details": str}],
+        "alibi_ops": [{"character": str, "timeframe": str, "account": str, "credibility_score": float}]
+      }
+    """
+    context = _build_case_context_text(room_code)
+    memory_text = "\n".join(f"{m['speaker']}: {m['content']}" for m in memory.get())
+    system = (
+        "You are the Narrative Controller ensuring consistency with the case framework. "
+        "Answer ONLY as the character. Also return STRICT JSON ops to update case state."
+    )
+    user = (
+        f"Case context: {context}\n" +
+        f"Conversation so far:\n{memory_text}\n\n" +
+        f"Character: {character_name}\nQuestion: {question}\n\n" +
+        "Return a JSON object with keys: answer (string), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
+        "Include only case-relevant clues (IMPORTANT or CONTRADICTION). "
+        "Example: {\"answer\": \"...\", \"clues\":[{\"text\":\"She has no sister\",\"type\":\"IMPORTANT\"}], \"evidence_ops\":[], \"timeline_ops\":[], \"alibi_ops\":[]}"
+    )
+    try:
+        import openai
+        resp = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.4,
+        )
+        raw = resp.choices[0].message.content or ""
+        import json
+        parsed = json.loads(raw)
+        answer = str(parsed.get("answer", "")).strip()
+        # Save answer to memory (like ask_character does)
+        memory.add("Detective", question)
+        memory.add(character_name, answer)
+        ops = {
+            "clues": parsed.get("clues", []) or [],
+            "evidence_ops": parsed.get("evidence_ops", []) or [],
+            "timeline_ops": parsed.get("timeline_ops", []) or [],
+            "alibi_ops": parsed.get("alibi_ops", []) or [],
+        }
+        return answer, ops
+    except Exception:
+        # fallback to plain answer + no ops
+        ans = await answer_in_character(room_code, character_agent, character_name, question, memory)
+        return ans, {"clues": [], "evidence_ops": [], "timeline_ops": [], "alibi_ops": []}
+
+
+def _safe_str(x: Any) -> str:
+    return (str(x) if x is not None else "").strip()
+
+
+def apply_ops(room_code: str, character_name: str, ops: Dict[str, Any], memory: Any) -> Dict[str, bool]:
+    """Apply controller ops to DB and memory. Returns which domains changed."""
+    changed = {"clues": False, "evidence": False, "timeline": False, "alibis": False}
+    # Lazy imports to avoid cycles
+    try:
+        from ..db import add_clue as db_add_clue, insert_evidence as db_insert_evidence, mark_evidence_discovered as db_mark_discovered
+        from ..db import insert_timeline_event as db_insert_timeline_event, insert_alibi as db_insert_alibi
+    except Exception:
+        from db import add_clue as db_add_clue, insert_evidence as db_insert_evidence, mark_evidence_discovered as db_mark_discovered
+        from db import insert_timeline_event as db_insert_timeline_event, insert_alibi as db_insert_alibi
+
+    # clues
+    allowed = {"IMPORTANT", "CONTRADICTION"}
+    for c in ops.get("clues", []) or []:
+        text = _safe_str(c.get("text"))
+        ctype = _safe_str(c.get("type")).upper()
+        if text and ctype in allowed:
+            memory.add_clue(text, clue_type=ctype, source=character_name)
+            try:
+                db_add_clue(room_code, text=text, clue_type=ctype, source=character_name, timestamp=None)
+            except Exception:
+                pass
+            changed["clues"] = True
+
+    # evidence ops
+    for e in ops.get("evidence_ops", []) or []:
+        op = _safe_str(e.get("op")).lower()
+        if op == "insert":
+            try:
+                db_insert_evidence(
+                    room_code,
+                    title=_safe_str(e.get("title")),
+                    ev_type=_safe_str(e.get("type")) or "item",
+                    location=_safe_str(e.get("location")) or None,
+                    notes=_safe_str(e.get("notes")) or None,
+                    is_discovered=bool(e.get("is_discovered", True)),
+                )
+                changed["evidence"] = True
+            except Exception:
+                pass
+        elif op == "discover":
+            # Discovery by location requires a prior insert in DB; this is a best-effort
+            try:
+                from ..db import find_undiscovered_evidence_by_location as db_find
+            except Exception:
+                from db import find_undiscovered_evidence_by_location as db_find
+            ok, item = db_find(room_code, _safe_str(e.get("location")))
+            if ok and item and item.get("id"):
+                try:
+                    db_mark_discovered(room_code, item.get("id"))
+                    changed["evidence"] = True
+                except Exception:
+                    pass
+
+    # timeline ops
+    for t in ops.get("timeline_ops", []) or []:
+        try:
+            db_insert_timeline_event(
+                room_code,
+                tstamp=_safe_str(t.get("tstamp")) or "",
+                phase=_safe_str(t.get("phase")) or "during",
+                label=_safe_str(t.get("label")) or "",
+                details=_safe_str(t.get("details")) or None,
+            )
+            changed["timeline"] = True
+        except Exception:
+            pass
+
+    # alibi ops
+    for a in ops.get("alibi_ops", []) or []:
+        try:
+            db_insert_alibi(
+                room_code,
+                character=_safe_str(a.get("character")) or character_name,
+                timeframe=_safe_str(a.get("timeframe")) or "",
+                account=_safe_str(a.get("account")) or "",
+                credibility_score=float(a.get("credibility_score")) if a.get("credibility_score") is not None else None,
+            )
+            changed["alibis"] = True
+        except Exception:
+            pass
+
+    return changed
 
 

@@ -592,8 +592,10 @@ async def ask(sid, data):
         # AI handles it
         log.info(f"Using AI for {character}")
         agent = find_character(character)
-        # Route through controller to enforce case consistency
-        answer = await answer_in_character(room_code, agent, character, question, room["memory"])
+        # Route through controller with structured ops; fallback handled inside
+        from logic.controller import generate_structured_answer, apply_ops
+        answer, ops = await generate_structured_answer(room_code, agent, character, question, room["memory"])  # type: ignore
+        changes = apply_ops(room_code, character, ops, room["memory"])  # persist any state changes
 
     # Send answer back to detective
     if room.get("detective_sid"):
@@ -624,6 +626,16 @@ async def ask(sid, data):
 
     # Tell clients to refresh clues (your GUI will still call GET /clues)
     await sio.emit("clues_updated", {}, room=room_code)
+    try:
+        if 'changes' in locals():
+            if changes.get('evidence'):
+                await sio.emit("evidence_updated", {}, room=room_code)
+            if changes.get('timeline'):
+                await sio.emit("timeline_updated", {}, room=room_code)
+            if changes.get('alibis'):
+                await sio.emit("alibis_updated", {}, room=room_code)
+    except Exception:
+        pass
 
 @sio.event
 async def murderer_answer(sid, data):
