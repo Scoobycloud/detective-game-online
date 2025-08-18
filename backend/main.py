@@ -43,6 +43,13 @@ try:
         add_clue as db_add_clue,
         get_clues_for_room as db_get_clues_for_room,
         get_character_profile as db_get_character_profile,
+        upsert_case as db_upsert_case,
+        upsert_case_character as db_upsert_case_character,
+        insert_evidence as db_insert_evidence,
+        insert_timeline_event as db_insert_timeline_event,
+        insert_relationship as db_insert_relationship,
+        insert_alibi as db_insert_alibi,
+        get_case_framework as db_get_case_framework,
     )
 except Exception:
     from db import (
@@ -52,6 +59,13 @@ except Exception:
         add_clue as db_add_clue,
         get_clues_for_room as db_get_clues_for_room,
         get_character_profile as db_get_character_profile,
+        upsert_case as db_upsert_case,
+        upsert_case_character as db_upsert_case_character,
+        insert_evidence as db_insert_evidence,
+        insert_timeline_event as db_insert_timeline_event,
+        insert_relationship as db_insert_relationship,
+        insert_alibi as db_insert_alibi,
+        get_case_framework as db_get_case_framework,
     )
     try:
         from db import room_exists as db_room_exists
@@ -110,6 +124,18 @@ async def startup_event():
 @app.get("/characters")
 async def get_characters():
     return [char.name for char in characters]
+
+@app.get("/rooms/{code}/framework")
+async def get_case_framework_http(code: str):
+    try:
+        if 'db_get_case_framework' in globals() and db_get_case_framework:
+            ok, data = db_get_case_framework(code)
+            if not ok:
+                return {"error": "db_unavailable"}
+            return data or {"error": "not_found"}
+    except Exception as e:
+        return {"error": str(e)}
+    return {"error": "not_configured"}
 
 @app.get("/characters/{name}/profile")
 async def get_character_profile_http(name: str):
@@ -260,6 +286,32 @@ async def create_room(sid, data):
         log.info(f"DB create_room ok={ok} info={info}")
     except Exception as e:
         log.info(f"DB create_room failed: {e}")
+
+    # Generate a lightweight case framework (deterministic by code)
+    try:
+        seed = code
+        summary = {
+            "victim": "Mr. Whitaker",
+            "murderer": "TBD",
+            "motive": "Debt and resentment",
+            "weapon": "Heavy candlestick",
+            "location": "Whitestone Manor - Study",
+            "time": "~9:00 PM",
+        }
+        db_upsert_case(code, status="open", seed=seed, summary=summary)
+        # seed notable characters (names here align with default roster; roles illustrative)
+        db_upsert_case_character(code, name="Mrs. Bellamy", role="witness", personality={"traits": ["poised", "observant"]})
+        db_upsert_case_character(code, name="Mr. Holloway", role="suspect", personality={"traits": ["irritable", "defensive"]})
+        db_upsert_case_character(code, name="Tommy the Janitor", role="bystander", personality={"traits": ["nervous", "eager-to-please"]})
+        db_upsert_case_character(code, name="Dr. Adrian Blackwood", role="suspect", personality={"traits": ["calm", "clinical"]})
+        # first timeline marker
+        db_insert_timeline_event(code, tstamp="21:00", phase="during", label="Murder timeframe", details="Victim last seen alive near 8:45 PM; sound reported near 9:00 PM")
+        # seed relationship example
+        db_insert_relationship(code, "Mr. Holloway", "Mr. Whitaker", "debts", notes="Unpaid fees and public argument last week")
+        # seed undiscovered evidence example
+        db_insert_evidence(code, title="Brass candlestick", ev_type="weapon", location="Study fireplace", notes="Traces of residue; partially wiped", is_discovered=False)
+    except Exception as e:
+        log.info(f"Case framework generation failed: {e}")
     log.info(f"ROOM CREATED {code}")
     await sio.emit("room_created", {"room": code}, room=sid)
 

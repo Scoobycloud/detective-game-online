@@ -204,3 +204,150 @@ def get_character_profile(name: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
         print("DB get_character_profile warning:", e)
         return False, None
 
+
+# ==============================
+# Case framework persistence
+# ==============================
+
+def upsert_case(room_code: str, status: str, seed: str, summary: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("cases")
+            .upsert({
+                "room_code": room_code,
+                "status": status,
+                "seed": seed,
+                "summary": summary,
+            })
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB upsert_case warning:", e)
+        return False, str(e)
+
+
+def upsert_case_character(room_code: str, name: str, role: str, personality: Optional[Dict[str, Any]] = None, knowledge_scope: Optional[Dict[str, Any]] = None) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("case_characters")
+            .upsert({
+                "room_code": room_code,
+                "name": name,
+                "role": role,
+                "personality": personality,
+                "knowledge_scope": knowledge_scope,
+            })
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB upsert_case_character warning:", e)
+        return False, str(e)
+
+
+def insert_evidence(room_code: str, title: str, ev_type: str, location: Optional[str], notes: Optional[str] = None, is_discovered: bool = False) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("evidence")
+            .insert({
+                "room_code": room_code,
+                "title": title,
+                "type": ev_type,
+                "location": location,
+                "is_discovered": is_discovered,
+                "notes": notes,
+            })
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB insert_evidence warning:", e)
+        return False, str(e)
+
+
+def insert_timeline_event(room_code: str, tstamp: str, phase: str, label: str, details: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("timeline_events")
+            .insert({
+                "room_code": room_code,
+                "tstamp": tstamp,
+                "phase": phase,
+                "label": label,
+                "details": details,
+            })
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB insert_timeline_event warning:", e)
+        return False, str(e)
+
+
+def insert_relationship(room_code: str, a: str, b: str, kind: str, notes: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("relationships")
+            .insert({
+                "room_code": room_code,
+                "a": a,
+                "b": b,
+                "kind": kind,
+                "notes": notes,
+            })
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB insert_relationship warning:", e)
+        return False, str(e)
+
+
+def insert_alibi(room_code: str, character: str, timeframe: str, account: str, credibility_score: Optional[float] = None) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("alibis")
+            .insert({
+                "room_code": room_code,
+                "character": character,
+                "timeframe": timeframe,
+                "account": account,
+                "credibility_score": credibility_score,
+            })
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB insert_alibi warning:", e)
+        return False, str(e)
+
+
+def get_case_framework(room_code: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    if not supabase:
+        return False, None
+    try:
+        case_res = supabase.table("cases").select("room_code, status, seed, summary").eq("room_code", room_code).limit(1).execute()
+        case_rows = getattr(case_res, "data", []) or []
+        if not case_rows:
+            return True, None
+        framework: Dict[str, Any] = {"case": case_rows[0]}
+        chars_res = supabase.table("case_characters").select("name, role, personality").eq("room_code", room_code).execute()
+        framework["characters"] = getattr(chars_res, "data", []) or []
+        return True, framework
+    except Exception as e:
+        print("DB get_case_framework warning:", e)
+        return False, None
+
