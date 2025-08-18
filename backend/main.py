@@ -170,6 +170,22 @@ async def get_room_timeline_http(code: str):
         return {"error": str(e)}
     return []
 
+@app.get("/rooms/{code}/alibis")
+async def get_room_alibis_http(code: str):
+    try:
+        from db import get_alibis_for_room as _get_alibis_for_room  # type: ignore
+    except Exception:
+        _get_alibis_for_room = None  # type: ignore
+    try:
+        if _get_alibis_for_room:
+            ok, items = _get_alibis_for_room(code)
+            if not ok:
+                return {"error": "db_unavailable"}
+            return items
+    except Exception as e:
+        return {"error": str(e)}
+    return []
+
 @app.post("/rooms/{code}/search")
 async def search_location_http(code: str, request: Request):
     try:
@@ -373,6 +389,11 @@ async def create_room(sid, data):
         db_insert_relationship(code, "Mr. Holloway", "Mr. Whitaker", "debts", notes="Unpaid fees and public argument last week")
         # seed undiscovered evidence example
         db_insert_evidence(code, title="Brass candlestick", ev_type="weapon", location="Study fireplace", notes="Traces of residue; partially wiped", is_discovered=False)
+        # seed basic alibis
+        db_insert_alibi(code, character="Mrs. Bellamy", timeframe="20:45–21:15", account="Preparing tea in the sunroom; saw no one enter the study", credibility_score=0.6)
+        db_insert_alibi(code, character="Mr. Holloway", timeframe="20:50–21:10", account="Checking boiler in the basement", credibility_score=0.4)
+        db_insert_alibi(code, character="Tommy the Janitor", timeframe="20:40–21:20", account="Cleaning corridor near the north wing", credibility_score=0.5)
+        db_insert_alibi(code, character="Dr. Adrian Blackwood", timeframe="20:55–21:05", account="On a phone call in the courtyard", credibility_score=0.7)
     except Exception as e:
         log.info(f"Case framework generation failed: {e}")
     log.info(f"ROOM CREATED {code}")

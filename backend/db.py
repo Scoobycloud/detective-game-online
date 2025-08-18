@@ -446,6 +446,23 @@ def get_credibility_counts(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
     """Return a list of {character, contradictions} by scanning contradiction evidence notes."""
     if not supabase:
         return False, []
+
+
+def get_alibis_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    if not supabase:
+        return False, []
+    try:
+        res = (
+            supabase.table("alibis")
+            .select("id,character,timeframe,account,credibility_score,created_at")
+            .eq("room_code", room_code)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return True, getattr(res, "data", []) or []
+    except Exception as e:
+        print("DB get_alibis_for_room warning:", e)
+        return False, []
     try:
         res = (
             supabase.table("evidence")
