@@ -415,6 +415,7 @@ def find_undiscovered_evidence_by_location(room_code: str, location_query: str) 
             .eq("room_code", room_code)
             .eq("is_discovered", False)
             .ilike("location", f"%{location_query}%")
+            .order("created_at", desc=False)
             .limit(1)
             .execute()
         )
@@ -462,6 +463,23 @@ def get_alibis_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
         return True, getattr(res, "data", []) or []
     except Exception as e:
         print("DB get_alibis_for_room warning:", e)
+        return False, []
+
+
+def get_case_characters_min(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    """Return characters with personality for credibility hints."""
+    if not supabase:
+        return False, []
+    try:
+        res = (
+            supabase.table("case_characters")
+            .select("name, role, personality")
+            .eq("room_code", room_code)
+            .execute()
+        )
+        return True, getattr(res, "data", []) or []
+    except Exception as e:
+        print("DB get_case_characters_min warning:", e)
         return False, []
     try:
         res = (

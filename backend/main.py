@@ -138,6 +138,27 @@ async def get_case_framework_http(code: str):
         return {"error": str(e)}
     return {"error": "not_configured"}
 
+@app.get("/rooms/{code}/credibility")
+async def get_credibility_http(code: str):
+    try:
+        from db import get_credibility_counts as _get_cred, get_case_characters_min as _get_chars  # type: ignore
+    except Exception:
+        _get_cred = None  # type: ignore
+        _get_chars = None  # type: ignore
+    try:
+        out: Dict[str, Any] = {"counts": [], "personality": []}
+        if _get_cred:
+            ok, items = _get_cred(code)
+            if ok:
+                out["counts"] = items
+        if _get_chars:
+            ok2, chars = _get_chars(code)
+            if ok2:
+                out["personality"] = chars
+        return out
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/rooms/{code}/evidence")
 async def get_room_evidence_http(code: str):
     try:

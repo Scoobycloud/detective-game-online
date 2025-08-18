@@ -172,12 +172,21 @@ def apply_ops(room_code: str, character_name: str, ops: Dict[str, Any], memory: 
     try:
         from ..db import add_clue as db_add_clue, insert_evidence as db_insert_evidence, mark_evidence_discovered as db_mark_discovered
         from ..db import insert_timeline_event as db_insert_timeline_event, insert_alibi as db_insert_alibi
+        from ..db import get_case_character as db_get_case_character
     except Exception:
         from db import add_clue as db_add_clue, insert_evidence as db_insert_evidence, mark_evidence_discovered as db_mark_discovered
         from db import insert_timeline_event as db_insert_timeline_event, insert_alibi as db_insert_alibi
+        from db import get_case_character as db_get_case_character
 
     # clues
     allowed = {"IMPORTANT", "CONTRADICTION"}
+    is_deceptive = False
+    try:
+        ok_ch, ch = db_get_case_character(room_code, character_name)
+        if ok_ch and ch and isinstance(ch.get("personality"), dict):
+            is_deceptive = (ch.get("personality", {}) or {}).get("honesty") == "deceptive"
+    except Exception:
+        pass
     for c in ops.get("clues", []) or []:
         text = _safe_str(c.get("text"))
         ctype = _safe_str(c.get("type")).upper()
@@ -188,6 +197,20 @@ def apply_ops(room_code: str, character_name: str, ops: Dict[str, Any], memory: 
             except Exception:
                 pass
             changed["clues"] = True
+            # If contradiction and deceptive persona, nudge suspicion by adding a contradiction evidence note
+            if ctype == "CONTRADICTION" and is_deceptive:
+                try:
+                    db_insert_evidence(
+                        room_code,
+                        title="Statement contradiction",
+                        ev_type="contradiction",
+                        location=None,
+                        notes=f"character={character_name}; note={text}",
+                        is_discovered=True,
+                    )
+                    changed["evidence"] = True
+                except Exception:
+                    pass
 
     # evidence ops
     for e in ops.get("evidence_ops", []) or []:
