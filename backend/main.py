@@ -170,6 +170,36 @@ async def get_room_timeline_http(code: str):
         return {"error": str(e)}
     return []
 
+@app.post("/rooms/{code}/search")
+async def search_location_http(code: str, request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    location = (data or {}).get("location") or ""
+    if not location:
+        return {"error": "missing_location"}
+    try:
+        from db import find_undiscovered_evidence_by_location as _find, mark_evidence_discovered as _mark
+    except Exception:
+        _find = None  # type: ignore
+        _mark = None  # type: ignore
+    try:
+        if not _find or not _mark:
+            return {"error": "db_unavailable"}
+        ok, item = _find(code, location)
+        if not ok:
+            return {"error": "db_unavailable"}
+        if not item:
+            return {"found": False}
+        # mark discovered
+        _mark(code, item.get("id"))
+        # notify sockets
+        await sio.emit("evidence_updated", {}, room=code)
+        return {"found": True, "evidence": item}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/characters/{name}/profile")
 async def get_character_profile_http(name: str):
     try:

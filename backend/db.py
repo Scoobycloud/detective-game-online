@@ -404,3 +404,71 @@ def get_timeline_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
         print("DB get_timeline_for_room warning:", e)
         return False, []
 
+
+def find_undiscovered_evidence_by_location(room_code: str, location_query: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    if not supabase:
+        return False, None
+    try:
+        res = (
+            supabase.table("evidence")
+            .select("id,title,type,location,is_discovered,notes")
+            .eq("room_code", room_code)
+            .eq("is_discovered", False)
+            .ilike("location", f"%{location_query}%")
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", []) or []
+        return True, rows[0] if rows else None
+    except Exception as e:
+        print("DB find_undiscovered_evidence_by_location warning:", e)
+        return False, None
+
+
+def mark_evidence_discovered(room_code: str, evidence_id: str) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = (
+            supabase.table("evidence")
+            .update({"is_discovered": True, "discovered_at": "now()"})
+            .eq("room_code", room_code)
+            .eq("id", evidence_id)
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB mark_evidence_discovered warning:", e)
+        return False, str(e)
+
+
+def get_credibility_counts(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    """Return a list of {character, contradictions} by scanning contradiction evidence notes."""
+    if not supabase:
+        return False, []
+    try:
+        res = (
+            supabase.table("evidence")
+            .select("notes")
+            .eq("room_code", room_code)
+            .eq("type", "contradiction")
+            .execute()
+        )
+        rows = getattr(res, "data", []) or []
+        counts: Dict[str, int] = {}
+        for r in rows:
+            notes = (r or {}).get("notes") or ""
+            name = None
+            # crude parse: look for 'character=Name' in notes
+            for part in str(notes).split(";"):
+                part = part.strip()
+                if part.lower().startswith("character="):
+                    name = part.split("=", 1)[1].strip()
+                    break
+            if name:
+                counts[name] = counts.get(name, 0) + 1
+        return True, [{"character": k, "contradictions": v} for k, v in counts.items()]
+    except Exception as e:
+        print("DB get_credibility_counts warning:", e)
+        return False, []
+

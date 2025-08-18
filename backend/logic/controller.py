@@ -83,4 +83,6 @@ async def postprocess_human_answer(
     except Exception:
         pass
 
+    # TODO: future: detect contradictions vs case summary and insert 'contradiction' evidence
+
 
