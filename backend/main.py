@@ -138,6 +138,38 @@ async def get_case_framework_http(code: str):
         return {"error": str(e)}
     return {"error": "not_configured"}
 
+@app.get("/rooms/{code}/evidence")
+async def get_room_evidence_http(code: str):
+    try:
+        from db import get_evidence_for_room as _get_evidence_for_room  # type: ignore
+    except Exception:
+        _get_evidence_for_room = None  # type: ignore
+    try:
+        if _get_evidence_for_room:
+            ok, items = _get_evidence_for_room(code)
+            if not ok:
+                return {"error": "db_unavailable"}
+            return items
+    except Exception as e:
+        return {"error": str(e)}
+    return []
+
+@app.get("/rooms/{code}/timeline")
+async def get_room_timeline_http(code: str):
+    try:
+        from db import get_timeline_for_room as _get_timeline_for_room  # type: ignore
+    except Exception:
+        _get_timeline_for_room = None  # type: ignore
+    try:
+        if _get_timeline_for_room:
+            ok, items = _get_timeline_for_room(code)
+            if not ok:
+                return {"error": "db_unavailable"}
+            return items
+    except Exception as e:
+        return {"error": str(e)}
+    return []
+
 @app.get("/characters/{name}/profile")
 async def get_character_profile_http(name: str):
     try:

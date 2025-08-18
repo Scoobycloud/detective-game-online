@@ -351,3 +351,56 @@ def get_case_framework(room_code: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
         print("DB get_case_framework warning:", e)
         return False, None
 
+
+def get_case_character(room_code: str, name: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    if not supabase:
+        return False, None
+    try:
+        res = (
+            supabase.table("case_characters")
+            .select("name, role, personality, knowledge_scope")
+            .eq("room_code", room_code)
+            .eq("name", name)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", []) or []
+        return True, rows[0] if rows else None
+    except Exception as e:
+        print("DB get_case_character warning:", e)
+        return False, None
+
+
+def get_evidence_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    if not supabase:
+        return False, []
+    try:
+        res = (
+            supabase.table("evidence")
+            .select("id,title,type,location,is_discovered,discovered_at,notes,created_at")
+            .eq("room_code", room_code)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return True, getattr(res, "data", []) or []
+    except Exception as e:
+        print("DB get_evidence_for_room warning:", e)
+        return False, []
+
+
+def get_timeline_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    if not supabase:
+        return False, []
+    try:
+        res = (
+            supabase.table("timeline_events")
+            .select("id,tstamp,phase,label,details,created_at")
+            .eq("room_code", room_code)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return True, getattr(res, "data", []) or []
+    except Exception as e:
+        print("DB get_timeline_for_room warning:", e)
+        return False, []
+
