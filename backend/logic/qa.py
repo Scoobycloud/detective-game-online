@@ -25,14 +25,16 @@ async def ask_character(agent, question: str, memory):
     answer = re.sub(pattern, "", answer, flags=re.IGNORECASE)
     memory.add(agent.name, answer)
 
-    # === Ask GPT to extract structured clues ===
-    clue_prompt = f"""Extract all potential clues from the following reply. 
-Label each clue as either "important", "background", or "gossip" depending on how relevant and actionable it is to a murder investigation.
-Reply in JSON format as a list of objects like this:
+    # === Ask GPT to extract structured clues (case-relevant ONLY) ===
+    clue_prompt = f"""Extract only case-relevant investigative facts from the reply below. 
+Return items ONLY if they meaningfully narrow suspects, establish or contradict alibis, reveal opportunity/motive/means, or are specific physical evidence. 
+Exclude greetings, pleasantries, generic empathy, and small talk.
+Label each as one of: "IMPORTANT" or "CONTRADICTION" (use CONTRADICTION if it conflicts with prior statements or common facts).
+Reply in STRICT JSON array form, e.g.:
 [
-  {{"text": "She heard a loud thud around 9am", "type": "important"}},
-  {{"text": "She was watering plants", "type": "background"}},
-  {{"text": "She thinks the victim was grumpy", "type": "gossip"}}
+  {{"text": "She does not have a sister", "type": "IMPORTANT"}},
+  {{"text": "He was with me at 9pm", "type": "IMPORTANT"}},
+  {{"text": "Claims she was alone at 9pm but earlier said she met Holloway", "type": "CONTRADICTION"}}
 ]
 
 Reply: {answer}
@@ -47,10 +49,11 @@ Reply: {answer}
 
         parsed = json.loads(clue_response.choices[0].message.content.strip())
 
+        allowed = {"IMPORTANT", "CONTRADICTION"}
         for clue in parsed:
             text = clue.get("text", "").strip()
-            clue_type = clue.get("type", "fact").upper()
-            if text:
+            clue_type = str(clue.get("type", "")).upper().strip()
+            if text and clue_type in allowed:
                 memory.add_clue(text, clue_type=clue_type, source=agent.name)
 
     except Exception as e:
@@ -67,14 +70,11 @@ async def extract_clues_from_reply(agent_name: str, reply: str, memory):
     import json
     import openai
 
-    clue_prompt = f"""Extract all potential clues from the following reply. 
-Label each clue as either "important", "background", or "gossip" depending on how relevant and actionable it is to a murder investigation.
-Reply in JSON format as a list of objects like this:
-[
-  {{"text": "She heard a loud thud around 9am", "type": "important"}},
-  {{"text": "She was watering plants", "type": "background"}},
-  {{"text": "She thinks the victim was grumpy", "type": "gossip"}}
-]
+    clue_prompt = f"""Extract only case-relevant investigative facts from the reply below. 
+Return items ONLY if they meaningfully narrow suspects, establish or contradict alibis, reveal opportunity/motive/means, or are specific physical evidence. 
+Exclude greetings, pleasantries, generic empathy, and small talk.
+Label each as one of: "IMPORTANT" or "CONTRADICTION".
+Reply in STRICT JSON array form.
 
 Reply: {reply}
 """
@@ -86,10 +86,11 @@ Reply: {reply}
             temperature=0.4,
         )
         parsed = json.loads(clue_response.choices[0].message.content.strip())
+        allowed = {"IMPORTANT", "CONTRADICTION"}
         for clue in parsed:
             text = clue.get("text", "").strip()
-            clue_type = clue.get("type", "fact").upper()
-            if text:
+            clue_type = str(clue.get("type", "")).upper().strip()
+            if text and clue_type in allowed:
                 memory.add_clue(text, clue_type=clue_type, source=agent_name)
     except Exception as e:  # pragma: no cover
         print("Failed to extract or parse clues (standalone):", e)
