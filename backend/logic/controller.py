@@ -57,6 +57,7 @@ async def answer_in_character(
         ok, ch = db_get_case_character(room_code, character_name)
     except Exception:
         ok, ch = (False, None)
+    honesty = None
     if ok and ch and isinstance(ch.get("knowledge_scope"), dict):
         scope = ch.get("knowledge_scope", {})
         if isinstance(scope, dict):
@@ -65,6 +66,18 @@ async def answer_in_character(
                 enriched_q = "[You do not know about that topic; answer honestly within your limits.]\n" + enriched_q
             allowed = scope.get("allowed", []) or []
             # no-op for allowed; could bias later
+    if ok and ch and isinstance(ch.get("personality"), dict):
+        honesty = (ch.get("personality", {}) or {}).get("honesty")
+        if honesty == "deceptive":
+            enriched_q = (
+                "[You tend to deflect or obscure on sensitive topics (but keep consistency with prior lies). Lies must be plausible.]\n"
+                + enriched_q
+            )
+        elif honesty == "forgetful":
+            enriched_q = (
+                "[You are somewhat forgetful; if unsure about exact times, say so rather than inventing details.]\n"
+                + enriched_q
+            )
     answer = await ask_character(character_agent, enriched_q, memory)
     return answer
 

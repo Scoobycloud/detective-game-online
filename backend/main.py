@@ -379,10 +379,34 @@ async def create_room(sid, data):
         }
         db_upsert_case(code, status="open", seed=seed, summary=summary)
         # seed notable characters (names here align with default roster; roles illustrative)
-        db_upsert_case_character(code, name="Mrs. Bellamy", role="witness", personality={"traits": ["poised", "observant"]})
-        db_upsert_case_character(code, name="Mr. Holloway", role="suspect", personality={"traits": ["irritable", "defensive"]})
-        db_upsert_case_character(code, name="Tommy the Janitor", role="bystander", personality={"traits": ["nervous", "eager-to-please"]})
-        db_upsert_case_character(code, name="Dr. Adrian Blackwood", role="suspect", personality={"traits": ["calm", "clinical"]})
+        db_upsert_case_character(
+            code,
+            name="Mrs. Bellamy",
+            role="witness",
+            personality={"traits": ["poised", "observant"], "honesty": "honest"},
+            knowledge_scope={"cannot": ["technical boiler details"], "allowed": ["social observations"]},
+        )
+        db_upsert_case_character(
+            code,
+            name="Mr. Holloway",
+            role="suspect",
+            personality={"traits": ["irritable", "defensive"], "honesty": "deceptive", "lie_about": ["debts", "argument with victim"]},
+            knowledge_scope={"cannot": ["exact time at boiler"], "allowed": ["maintenance issues"]},
+        )
+        db_upsert_case_character(
+            code,
+            name="Tommy the Janitor",
+            role="bystander",
+            personality={"traits": ["nervous", "eager-to-please"], "honesty": "forgetful"},
+            knowledge_scope={"cannot": ["exact times"], "allowed": ["places he cleaned"]},
+        )
+        db_upsert_case_character(
+            code,
+            name="Dr. Adrian Blackwood",
+            role="suspect",
+            personality={"traits": ["calm", "clinical"], "honesty": "honest"},
+            knowledge_scope={"cannot": ["house staff routines"], "allowed": ["medical observations"]},
+        )
         # first timeline marker
         db_insert_timeline_event(code, tstamp="21:00", phase="during", label="Murder timeframe", details="Victim last seen alive near 8:45 PM; sound reported near 9:00 PM")
         # seed relationship example
