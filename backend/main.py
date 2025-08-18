@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from agents.profiles import create_bellamy, create_holloway, create_tommy, create_perpetrator
 from logic.memory import Memory
 from logic.qa import ask_character, extract_clues_from_reply
+from logic.controller import answer_in_character, postprocess_human_answer
 import os
 from dotenv import load_dotenv
 import logging
@@ -503,12 +504,13 @@ async def ask(sid, data):
             PENDING.pop(corr_id, None)
         # Extract clues from human reply and add to memory
         if answer:
-            await extract_clues_from_reply(character, answer, room["memory"])  # best-effort
+            await postprocess_human_answer(room_code, character, answer, room["memory"])  # best-effort
     else:
         # AI handles it
         log.info(f"Using AI for {character}")
         agent = find_character(character)
-        answer = await ask_character(agent, question, room["memory"])
+        # Route through controller to enforce case consistency
+        answer = await answer_in_character(room_code, agent, character, question, room["memory"])
 
     # Send answer back to detective
     if room.get("detective_sid"):
