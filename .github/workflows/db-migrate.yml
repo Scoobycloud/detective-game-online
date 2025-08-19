@@ -30,8 +30,27 @@ jobs:
           ls -la supabase || true
           ls -la supabase/migrations || true
 
-      - name: Apply migrations (debug)
+      - name: Apply migrations (debug, force IPv4)
         working-directory: backend
-        run: supabase --debug db push --db-url "${{ secrets.SUPABASE_DB_URL }}"
+        run: |
+          set -euo pipefail
+          URL="${{ secrets.SUPABASE_DB_URL }}"
+          HOST=$(printf "%s" "$URL" | sed -E 's#^.*://[^@]*@([^/:]+).*$#\1#')
+          echo "DB host: $HOST"
+          if command -v getent >/dev/null 2>&1; then
+            IPV4=$(getent ahostsv4 "$HOST" | awk '{print $1; exit}')
+          else
+            IPV4=$(getent hosts "$HOST" | awk '/STREAM/ {print $1; exit}') || true
+          fi
+          if [ -z "${IPV4:-}" ]; then
+            echo "Could not resolve IPv4 for $HOST" >&2
+            exit 1
+          fi
+          echo "Using IPv4: $IPV4"
+          SEP='&';
+          case "$URL" in *\?*) ;; *) SEP='?';; esac
+          URL_IPV4="${URL}${SEP}hostaddr=${IPV4}"
+          echo "Pushing migrations via: hostaddr=${IPV4}"
+          supabase --debug db push --db-url "$URL_IPV4"
 
 
