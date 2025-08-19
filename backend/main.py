@@ -279,6 +279,27 @@ async def debug_supabase():
     except Exception as e:
         return {"error": str(e)}
 
+@app.get("/debug/rooms/{code}")
+async def debug_get_room_http(code: str):
+    """Debug endpoint: returns room row with code,status,name,created_at,test if available."""
+    try:
+        import db as _db  # type: ignore
+    except Exception:
+        try:
+            from . import db as _db  # type: ignore
+        except Exception:
+            _db = None  # type: ignore
+    if not _db or getattr(_db, "supabase", None) is None:  # type: ignore
+        return {"error": "db_unavailable"}
+    try:
+        res = _db.supabase.table("rooms").select("code,status,name,created_at,test").eq("code", code).limit(1).execute()  # type: ignore
+        data = getattr(res, "data", []) or []
+        if not data:
+            return {"error": "not_found"}
+        return data[0]
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/murderer")
 async def get_murderer_page():
     """Serve the murderer console page"""
