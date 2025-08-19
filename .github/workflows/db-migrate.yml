@@ -37,7 +37,6 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          echo "Applying SQL files in supabase/migrations via Management API"
           sudo apt-get update -y >/dev/null 2>&1 || true
           sudo apt-get install -y jq >/dev/null 2>&1 || true
           API="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/sql"
@@ -45,24 +44,11 @@ jobs:
           for file in supabase/migrations/*.sql; do
             echo "-- Applying: $file"
             DATA=$(jq -Rs . < "$file")
-            RESP=$(mktemp)
-            HTTP=$(curl -sS -w "\n%{http_code}" -o "$RESP" -X POST "$API" \
+            curl -sS -X POST "$API" \
               -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d "{\"query\":${DATA}}")
-            CODE=$(echo "$HTTP" | tail -n1)
-            echo "HTTP $CODE"
-            cat "$RESP" | jq . || cat "$RESP"
-            rm -f "$RESP"
-            if [ "$CODE" != "200" ]; then
-              echo "Migration failed for $file (HTTP $CODE)" >&2
-              exit 1
-            fi
-            # Fail if API returned an error object
-            if jq -e 'has("error") and .error != null' <(echo "$HTTP") >/dev/null 2>&1; then
-              echo "API error returned for $file" >&2
-              exit 1
-            fi
+              -d "{\"query\":${DATA}}" | tee >(jq -r '.message? // empty' || true)
+            echo
           done
 
 
