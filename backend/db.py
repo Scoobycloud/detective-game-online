@@ -134,6 +134,64 @@ def add_transcript_entry(
         return False, str(e)
 
 
+# ==============================
+# Rooms: names and listing
+# ==============================
+
+def set_room_name(code: str, name: str) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        res = supabase.table("rooms").update({"name": name}).eq("code", code).execute()
+        return True, None
+    except Exception as e:
+        print("DB set_room_name warning:", e)
+        return False, str(e)
+
+
+def room_name_exists(name: str) -> bool:
+    if not supabase:
+        return False
+    try:
+        res = supabase.table("rooms").select("name").ilike("name", name).limit(1).execute()
+        items = getattr(res, "data", []) or []
+        return bool(items)
+    except Exception as e:
+        print("DB room_name_exists warning:", e)
+        return False
+
+
+def list_rooms() -> Tuple[bool, List[Dict[str, Any]]]:
+    if not supabase:
+        return False, []
+    try:
+        # Try selecting name if present, else fall back
+        try:
+            res = (
+                supabase.table("rooms")
+                .select("code,status,name,created_at")
+                .order("created_at", desc=True)
+                .limit(100)
+                .execute()
+            )
+            return True, getattr(res, "data", []) or []
+        except Exception:
+            res2 = (
+                supabase.table("rooms")
+                .select("code,status,created_at")
+                .order("created_at", desc=True)
+                .limit(100)
+                .execute()
+            )
+            rows = getattr(res2, "data", []) or []
+            for r in rows:
+                r.setdefault("name", None)
+            return True, rows
+    except Exception as e:
+        print("DB list_rooms warning:", e)
+        return False, []
+
+
 def add_clue(
     room_code: str,
     text: str,

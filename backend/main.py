@@ -284,6 +284,35 @@ async def get_murderer_page():
     """Serve the murderer console page"""
     return FileResponse("gui/electron/murderer.html")
 
+@app.get("/rooms")
+async def list_rooms_http():
+    try:
+        from db import list_rooms as _list_rooms  # type: ignore
+    except Exception:
+        _list_rooms = None  # type: ignore
+    try:
+        if _list_rooms:
+            ok, items = _list_rooms()
+            if not ok:
+                return {"error": "db_unavailable"}
+            return items
+    except Exception as e:
+        return {"error": str(e)}
+    return []
+
+@app.get("/rooms/name_exists")
+async def room_name_exists_http(name: str):
+    try:
+        from db import room_name_exists as _room_name_exists  # type: ignore
+    except Exception:
+        _room_name_exists = None  # type: ignore
+    try:
+        if _room_name_exists:
+            return {"exists": _room_name_exists(name)}
+    except Exception as e:
+        return {"error": str(e)}
+    return {"exists": False}
+
 @app.post("/ask")
 async def ask(request: Request):
     """
