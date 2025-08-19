@@ -29,6 +29,6 @@ jobs:
 
       - name: Apply migrations
         working-directory: backend
-        run: supabase db push --include-roles --include-policies
+        run: supabase db push --include-roles --include-policies --db-url "${{ secrets.SUPABASE_DB_URL }}"
 
 
