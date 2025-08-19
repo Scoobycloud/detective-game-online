@@ -30,7 +30,7 @@ jobs:
           ls -la supabase || true
           ls -la supabase/migrations || true
 
-      - name: Apply migrations via Supabase SQL API
+      - name: Apply migrations via Supabase SQL API (verbose)
         working-directory: backend
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -44,10 +44,14 @@ jobs:
           for file in supabase/migrations/*.sql; do
             echo "-- Applying: $file"
             DATA=$(jq -Rs . < "$file")
-            curl -sS -X POST "$API" \
+            RESP=$(mktemp)
+            CODE=$(curl -sS -w "\n%{http_code}" -o "$RESP" -X POST "$API" \
               -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d "{\"query\":${DATA}}" | tee >(jq -r '.message? // empty' || true)
+              -d "{\"query\":${DATA}}" | tail -n1)
+            echo "HTTP $CODE"
+            cat "$RESP" | jq . || cat "$RESP"
+            rm -f "$RESP"
             echo
           done
 
