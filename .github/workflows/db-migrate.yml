@@ -19,8 +19,19 @@ jobs:
           curl -sL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
           | tar -xz && sudo mv supabase /usr/local/bin/supabase
 
-      - name: Apply migrations
+      - name: Supabase CLI version
+        run: supabase --version
+
+      - name: List migrations directory
         working-directory: backend
-        run: supabase db push --db-url "${{ secrets.SUPABASE_DB_URL }}"
+        run: |
+          pwd
+          ls -la
+          ls -la supabase || true
+          ls -la supabase/migrations || true
+
+      - name: Apply migrations (debug)
+        working-directory: backend
+        run: supabase --debug db push --db-url "${{ secrets.SUPABASE_DB_URL }}"
 
 
