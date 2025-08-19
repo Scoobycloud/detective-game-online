@@ -19,16 +19,8 @@ jobs:
           curl -sL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
           | tar -xz && sudo mv supabase /usr/local/bin/supabase
 
-      - name: Link project
-        working-directory: backend
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-
       - name: Apply migrations
         working-directory: backend
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase db push --include-roles --include-policies --db-url "${{ secrets.SUPABASE_DB_URL }}"
 
 
