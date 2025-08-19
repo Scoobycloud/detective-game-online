@@ -281,50 +281,11 @@ async def debug_supabase():
 
 @app.get("/debug/rooms/{code}")
 async def debug_get_room_http(code: str):
-    """Debug endpoint: returns room row with code,status,name,created_at,test if available."""
-    try:
-        import db as _db  # type: ignore
-    except Exception:
-        try:
-            from . import db as _db  # type: ignore
-        except Exception:
-            _db = None  # type: ignore
-    if not _db or getattr(_db, "supabase", None) is None:  # type: ignore
-        return {"error": "db_unavailable"}
-    try:
-        res = _db.supabase.table("rooms").select("code,status,name,created_at,test").eq("code", code).limit(1).execute()  # type: ignore
-        data = getattr(res, "data", []) or []
-        if not data:
-            return {"error": "not_found"}
-        return data[0]
-    except Exception as e:
-        return {"error": str(e)}
+    return {"error": "disabled"}
 
 @app.get("/debug/rooms_columns")
 async def debug_rooms_columns():
-    """Return list of columns on public.rooms and whether 'test' exists."""
-    try:
-        import db as _db  # type: ignore
-    except Exception:
-        try:
-            from . import db as _db  # type: ignore
-        except Exception:
-            _db = None  # type: ignore
-    if not _db or getattr(_db, "supabase", None) is None:  # type: ignore
-        return {"error": "db_unavailable"}
-    try:
-        # Query information_schema via SQL API through Supabase client rpc
-        # Fallback: use a raw SQL call via postgrest if available is limited, so use rest rpc
-        sql = "select column_name from information_schema.columns where table_schema='public' and table_name='rooms' order by ordinal_position"
-        res = _db.supabase.postgrest.from_("rooms").select("code").limit(0).execute()  # type: ignore
-    except Exception:
-        res = None
-    try:
-        # Use management client not available; fallback to a lightweight query via REST if a function exists
-        # If none, attempt using the SQL API is out of scope here; instead return minimal info
-        return {"note": "schema inspection limited in this environment"}
-    except Exception as e:
-        return {"error": str(e)}
+    return {"error": "disabled"}
 
 @app.get("/murderer")
 async def get_murderer_page():
