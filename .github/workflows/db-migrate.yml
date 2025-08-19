@@ -30,27 +30,26 @@ jobs:
           ls -la supabase || true
           ls -la supabase/migrations || true
 
-      - name: Apply migrations (debug, force IPv4)
+      - name: Apply migrations via Supabase SQL API
         working-directory: backend
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          URL="${{ secrets.SUPABASE_DB_URL }}"
-          HOST=$(printf "%s" "$URL" | sed -E 's#^.*://[^@]*@([^/:]+).*$#\1#')
-          echo "DB host: $HOST"
-          if command -v getent >/dev/null 2>&1; then
-            IPV4=$(getent ahostsv4 "$HOST" | awk '{print $1; exit}')
-          else
-            IPV4=$(getent hosts "$HOST" | awk '/STREAM/ {print $1; exit}') || true
-          fi
-          if [ -z "${IPV4:-}" ]; then
-            echo "Could not resolve IPv4 for $HOST" >&2
-            exit 1
-          fi
-          echo "Using IPv4: $IPV4"
-          SEP='&';
-          case "$URL" in *\?*) ;; *) SEP='?';; esac
-          URL_IPV4="${URL}${SEP}hostaddr=${IPV4}"
-          echo "Pushing migrations via: hostaddr=${IPV4}"
-          supabase --debug db push --db-url "$URL_IPV4"
+          echo "Applying SQL files in supabase/migrations via Management API"
+          sudo apt-get update -y >/dev/null 2>&1 || true
+          sudo apt-get install -y jq >/dev/null 2>&1 || true
+          API="https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/sql"
+          shopt -s nullglob
+          for file in supabase/migrations/*.sql; do
+            echo "-- Applying: $file"
+            DATA=$(jq -Rs . < "$file")
+            curl -sS -X POST "$API" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"query\":${DATA}}" | tee >(jq -r '.message? // empty' || true)
+            echo
+          done
 
 
