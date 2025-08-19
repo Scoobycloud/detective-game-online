@@ -313,6 +313,51 @@ async def room_name_exists_http(name: str):
         return {"error": str(e)}
     return {"exists": False}
 
+@app.get("/rooms/new_code")
+async def get_new_room_code_http():
+    # Generate a code that does not exist in memory or DB
+    tries = 0
+    while True:
+        code = generate_room_code()
+        if code not in ROOMS:
+            exists_in_db = False
+            try:
+                if 'db_room_exists' in globals() and db_room_exists and db_room_exists(code):
+                    exists_in_db = True
+            except Exception:
+                exists_in_db = False
+            if not exists_in_db:
+                return {"code": code}
+        tries += 1
+        if tries > 20:
+            return {"error": "unable_to_generate"}
+
+@app.post("/rooms/{code}/name")
+async def set_room_name_http(code: str, request: Request):
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    name = (data or {}).get("name") or ""
+    if not name or len(name) < 4 or not name.isalnum():
+        return {"error": "invalid_name"}
+    try:
+        from db import room_name_exists as _exists, set_room_name as _set  # type: ignore
+    except Exception:
+        _exists = None  # type: ignore
+        _set = None  # type: ignore
+    try:
+        if not _exists or not _set:
+            return {"error": "db_unavailable"}
+        if _exists(name):
+            return {"error": "name_taken"}
+        ok, err = _set(code, name)
+        if not ok:
+            return {"error": err or "update_failed"}
+        return {"ok": True}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/ask")
 async def ask(request: Request):
     """
