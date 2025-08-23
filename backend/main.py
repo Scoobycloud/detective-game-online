@@ -3,7 +3,12 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from agents.profiles import create_bellamy, create_holloway, create_tommy, create_perpetrator
+from agents.profiles import (
+    create_bellamy,
+    create_holloway,
+    create_tommy,
+    create_perpetrator,
+)
 from logic.memory import Memory
 from logic.qa import ask_character, extract_clues_from_reply
 from logic.controller import answer_in_character, postprocess_human_answer
@@ -21,15 +26,19 @@ import random
 import string
 from typing import Dict, Any, Optional
 import inspect
+
 # === Firebase Admin (optional) ===
 try:
     import firebase_admin
     from firebase_admin import auth as fb_auth, credentials as fb_credentials
+
     _fb_app = None
     if not firebase_admin._apps:
         fb_creds_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
         if fb_creds_json:
-            _fb_app = firebase_admin.initialize_app(fb_credentials.Certificate(json.loads(fb_creds_json)))
+            _fb_app = firebase_admin.initialize_app(
+                fb_credentials.Certificate(json.loads(fb_creds_json))
+            )
 except Exception:
     firebase_admin = None  # type: ignore
     fb_auth = None  # type: ignore
@@ -68,6 +77,7 @@ except Exception:
         insert_alibi as db_insert_alibi,
         get_case_framework as db_get_case_framework,
     )
+
     try:
         from db import room_exists as db_room_exists
     except Exception:
@@ -111,6 +121,7 @@ ROOMS: Dict[str, Dict[str, Any]] = {}
 # === Characters (unchanged) ===
 characters = []
 
+
 @app.on_event("startup")
 async def startup_event():
     global characters
@@ -122,14 +133,16 @@ async def startup_event():
         create_perpetrator(),
     ]
 
+
 @app.get("/characters")
 async def get_characters():
     return [char.name for char in characters]
 
+
 @app.get("/rooms/{code}/framework")
 async def get_case_framework_http(code: str):
     try:
-        if 'db_get_case_framework' in globals() and db_get_case_framework:
+        if "db_get_case_framework" in globals() and db_get_case_framework:
             ok, data = db_get_case_framework(code)
             if not ok:
                 return {"error": "db_unavailable"}
@@ -138,10 +151,14 @@ async def get_case_framework_http(code: str):
         return {"error": str(e)}
     return {"error": "not_configured"}
 
+
 @app.get("/rooms/{code}/credibility")
 async def get_credibility_http(code: str):
     try:
-        from db import get_credibility_counts as _get_cred, get_case_characters_min as _get_chars  # type: ignore
+        from db import (
+            get_credibility_counts as _get_cred,
+            get_case_characters_min as _get_chars,
+        )  # type: ignore
     except Exception:
         _get_cred = None  # type: ignore
         _get_chars = None  # type: ignore
@@ -159,6 +176,7 @@ async def get_credibility_http(code: str):
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/rooms/{code}/evidence")
 async def get_room_evidence_http(code: str):
     try:
@@ -174,6 +192,7 @@ async def get_room_evidence_http(code: str):
     except Exception as e:
         return {"error": str(e)}
     return []
+
 
 @app.get("/rooms/{code}/timeline")
 async def get_room_timeline_http(code: str):
@@ -191,6 +210,7 @@ async def get_room_timeline_http(code: str):
         return {"error": str(e)}
     return []
 
+
 @app.get("/rooms/{code}/alibis")
 async def get_room_alibis_http(code: str):
     try:
@@ -207,6 +227,7 @@ async def get_room_alibis_http(code: str):
         return {"error": str(e)}
     return []
 
+
 @app.post("/rooms/{code}/search")
 async def search_location_http(code: str, request: Request):
     try:
@@ -217,7 +238,10 @@ async def search_location_http(code: str, request: Request):
     if not location:
         return {"error": "missing_location"}
     try:
-        from db import find_undiscovered_evidence_by_location as _find, mark_evidence_discovered as _mark
+        from db import (
+            find_undiscovered_evidence_by_location as _find,
+            mark_evidence_discovered as _mark,
+        )
     except Exception:
         _find = None  # type: ignore
         _mark = None  # type: ignore
@@ -237,10 +261,11 @@ async def search_location_http(code: str, request: Request):
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/characters/{name}/profile")
 async def get_character_profile_http(name: str):
     try:
-        if 'db_get_character_profile' in globals() and db_get_character_profile:
+        if "db_get_character_profile" in globals() and db_get_character_profile:
             ok, profile = db_get_character_profile(name)
             if not ok:
                 return {"error": "db_unavailable"}
@@ -251,15 +276,17 @@ async def get_character_profile_http(name: str):
         return {"error": str(e)}
     return {"error": "not_configured"}
 
+
 @app.get("/clues")
 async def get_clues():
     return memory.get_clues()
+
 
 @app.get("/rooms/{code}/clues")
 async def get_room_clues(code: str):
     # Prefer DB if available, fall back to in-memory
     try:
-        if 'db_get_clues_for_room' in globals() and db_get_clues_for_room:
+        if "db_get_clues_for_room" in globals() and db_get_clues_for_room:
             ok, items = db_get_clues_for_room(code)
             if ok and items:
                 return items
@@ -270,27 +297,32 @@ async def get_room_clues(code: str):
         return {"error": "Room not found"}
     return room["memory"].get_clues()
 
+
 @app.get("/debug/supabase")
 async def debug_supabase():
     try:
-        if 'db_debug_status' in globals() and db_debug_status:
+        if "db_debug_status" in globals() and db_debug_status:
             return db_debug_status()
         return {"configured": False}
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/debug/rooms/{code}")
 async def debug_get_room_http(code: str):
     return {"error": "disabled"}
+
 
 @app.get("/debug/rooms_columns")
 async def debug_rooms_columns():
     return {"error": "disabled"}
 
+
 @app.get("/murderer")
 async def get_murderer_page():
     """Serve the murderer console page"""
     return FileResponse("gui/electron/murderer.html")
+
 
 @app.get("/rooms")
 async def list_rooms_http():
@@ -308,6 +340,7 @@ async def list_rooms_http():
         return {"error": str(e)}
     return []
 
+
 @app.get("/rooms/name_exists")
 async def room_name_exists_http(name: str):
     try:
@@ -321,6 +354,7 @@ async def room_name_exists_http(name: str):
         return {"error": str(e)}
     return {"exists": False}
 
+
 @app.get("/rooms/new_code")
 async def get_new_room_code_http():
     # Generate a code that does not exist in memory or DB
@@ -330,7 +364,11 @@ async def get_new_room_code_http():
         if code not in ROOMS:
             exists_in_db = False
             try:
-                if 'db_room_exists' in globals() and db_room_exists and db_room_exists(code):
+                if (
+                    "db_room_exists" in globals()
+                    and db_room_exists
+                    and db_room_exists(code)
+                ):
                     exists_in_db = True
             except Exception:
                 exists_in_db = False
@@ -339,6 +377,7 @@ async def get_new_room_code_http():
         tries += 1
         if tries > 20:
             return {"error": "unable_to_generate"}
+
 
 @app.post("/rooms/{code}/name")
 async def set_room_name_http(code: str, request: Request):
@@ -365,6 +404,7 @@ async def set_room_name_http(code: str, request: Request):
         return {"ok": True}
     except Exception as e:
         return {"error": str(e)}
+
 
 @app.post("/ask")
 async def ask(request: Request):
@@ -399,14 +439,17 @@ sio = socketio.AsyncServer(
 )
 socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
+
 async def maybe_await(value):
     if inspect.isawaitable(value):
         return await value
     return value
 
+
 def generate_room_code(length: int = 6) -> str:
     alphabet = string.ascii_uppercase + string.digits
     return "".join(random.choice(alphabet) for _ in range(length))
+
 
 # correlation_id -> asyncio.Future for murderer replies
 PENDING: Dict[str, asyncio.Future] = {}
@@ -418,21 +461,27 @@ WAITING: Dict[str, set[str]] = {
     "murderer": set(),
 }
 
+
 def find_character(name: str):
     return next((c for c in characters if c.name == name), None)
 
+
 def normalize_name(name: str | None) -> str:
     return (name or "").strip().lower()
+
 
 @sio.event
 async def connect(sid, environ):
     log.info(f"Socket connected: {sid}")
     log.info(f"Connection from: {environ.get('HTTP_USER_AGENT', 'Unknown')}")
 
+
 @sio.event
 async def disconnect(sid):
     log.info(f"Socket disconnected: {sid}")
-    session = await maybe_await(sio.get_session(sid)) if hasattr(sio, "get_session") else {}
+    session = (
+        await maybe_await(sio.get_session(sid)) if hasattr(sio, "get_session") else {}
+    )
     room_code = (session or {}).get("room")
     role = (session or {}).get("role")
     if room_code and room_code in ROOMS:
@@ -445,6 +494,7 @@ async def disconnect(sid):
     for r in ("detective", "murderer"):
         if sid in WAITING[r]:
             WAITING[r].discard(sid)
+
 
 @sio.event
 async def create_room(sid, data):
@@ -487,44 +537,130 @@ async def create_room(sid, data):
             name="Mrs. Bellamy",
             role="witness",
             personality={"traits": ["poised", "observant"], "honesty": "honest"},
-            knowledge_scope={"cannot": ["technical boiler details"], "allowed": ["social observations"]},
+            knowledge_scope={
+                "cannot": ["technical boiler details"],
+                "allowed": ["social observations"],
+            },
         )
         db_upsert_case_character(
             code,
             name="Mr. Holloway",
             role="suspect",
-            personality={"traits": ["irritable", "defensive"], "honesty": "deceptive", "lie_about": ["debts", "argument with victim"]},
-            knowledge_scope={"cannot": ["exact time at boiler"], "allowed": ["maintenance issues"]},
+            personality={
+                "traits": ["irritable", "defensive"],
+                "honesty": "deceptive",
+                "lie_about": ["debts", "argument with victim"],
+            },
+            knowledge_scope={
+                "cannot": ["exact time at boiler"],
+                "allowed": ["maintenance issues"],
+            },
         )
         db_upsert_case_character(
             code,
             name="Tommy the Janitor",
             role="bystander",
-            personality={"traits": ["nervous", "eager-to-please"], "honesty": "forgetful"},
-            knowledge_scope={"cannot": ["exact times"], "allowed": ["places he cleaned"]},
+            personality={
+                "traits": ["nervous", "eager-to-please"],
+                "honesty": "forgetful",
+            },
+            knowledge_scope={
+                "cannot": ["exact times"],
+                "allowed": ["places he cleaned"],
+            },
         )
         db_upsert_case_character(
             code,
             name="Dr. Adrian Blackwood",
             role="suspect",
             personality={"traits": ["calm", "clinical"], "honesty": "honest"},
-            knowledge_scope={"cannot": ["house staff routines"], "allowed": ["medical observations"]},
+            knowledge_scope={
+                "cannot": ["house staff routines"],
+                "allowed": ["medical observations"],
+            },
         )
         # first timeline marker
-        db_insert_timeline_event(code, tstamp="21:00", phase="during", label="Murder timeframe", details="Victim last seen alive near 8:45 PM; sound reported near 9:00 PM")
+        db_insert_timeline_event(
+            code,
+            tstamp="21:00",
+            phase="during",
+            label="Murder timeframe",
+            details="Victim last seen alive near 8:45 PM; sound reported near 9:00 PM",
+        )
         # seed relationship example
-        db_insert_relationship(code, "Mr. Holloway", "Mr. Whitaker", "debts", notes="Unpaid fees and public argument last week")
+        db_insert_relationship(
+            code,
+            "Mr. Holloway",
+            "Mr. Whitaker",
+            "debts",
+            notes="Unpaid fees and public argument last week",
+        )
         # seed undiscovered evidence example
-        db_insert_evidence(code, title="Brass candlestick", ev_type="weapon", location="Study fireplace", notes="Traces of residue; partially wiped", is_discovered=False)
+        # Seed sample evidence with placeholder media paths under /evidence
+        db_insert_evidence(
+            code,
+            title="syringe",
+            ev_type="item",
+            location="Bathroom cabinet",
+            notes="Trace residue on needle",
+            is_discovered=False,
+            thumbnail_url="/evidence/syringe_thumb.jpg",
+            media_url="/evidence/syringe.jpg",
+        )
+        db_insert_evidence(
+            code,
+            title="park footage",
+            ev_type="video",
+            location="North Park gate",
+            notes="Figure entering gate at 21:03",
+            is_discovered=False,
+            thumbnail_url="/evidence/park_footage_thumb.jpg",
+            media_url="/evidence/park_footage.mp4",
+        )
+        db_insert_evidence(
+            code,
+            title="hanky",
+            ev_type="item",
+            location="Study",
+            notes="Monogrammed initial; faint stain",
+            is_discovered=False,
+            thumbnail_url="/evidence/hanky_thumb.jpg",
+            media_url="/evidence/hanky.jpg",
+        )
         # seed basic alibis
-        db_insert_alibi(code, character="Mrs. Bellamy", timeframe="20:45–21:15", account="Preparing tea in the sunroom; saw no one enter the study", credibility_score=0.6)
-        db_insert_alibi(code, character="Mr. Holloway", timeframe="20:50–21:10", account="Checking boiler in the basement", credibility_score=0.4)
-        db_insert_alibi(code, character="Tommy the Janitor", timeframe="20:40–21:20", account="Cleaning corridor near the north wing", credibility_score=0.5)
-        db_insert_alibi(code, character="Dr. Adrian Blackwood", timeframe="20:55–21:05", account="On a phone call in the courtyard", credibility_score=0.7)
+        db_insert_alibi(
+            code,
+            character="Mrs. Bellamy",
+            timeframe="20:45–21:15",
+            account="Preparing tea in the sunroom; saw no one enter the study",
+            credibility_score=0.6,
+        )
+        db_insert_alibi(
+            code,
+            character="Mr. Holloway",
+            timeframe="20:50–21:10",
+            account="Checking boiler in the basement",
+            credibility_score=0.4,
+        )
+        db_insert_alibi(
+            code,
+            character="Tommy the Janitor",
+            timeframe="20:40–21:20",
+            account="Cleaning corridor near the north wing",
+            credibility_score=0.5,
+        )
+        db_insert_alibi(
+            code,
+            character="Dr. Adrian Blackwood",
+            timeframe="20:55–21:05",
+            account="On a phone call in the courtyard",
+            credibility_score=0.7,
+        )
     except Exception as e:
         log.info(f"Case framework generation failed: {e}")
     log.info(f"ROOM CREATED {code}")
     await sio.emit("room_created", {"room": code}, room=sid)
+
 
 @sio.event
 async def join_role(sid, data):
@@ -541,7 +677,11 @@ async def join_role(sid, data):
         # Try to hydrate from DB (in case process restarted)
         hydrated = False
         try:
-            if 'db_room_exists' in globals() and db_room_exists and db_room_exists(room_code):
+            if (
+                "db_room_exists" in globals()
+                and db_room_exists
+                and db_room_exists(room_code)
+            ):
                 ROOMS[room_code] = {
                     "detective_sid": None,
                     "murderer_sid": None,
@@ -565,7 +705,9 @@ async def join_role(sid, data):
             log.info(f"Firebase token verification failed: {e}")
 
     room = ROOMS[room_code]
-    await maybe_await(sio.save_session(sid, {"role": role, "room": room_code, "user_id": user_id}))
+    await maybe_await(
+        sio.save_session(sid, {"role": role, "room": room_code, "user_id": user_id})
+    )
     await maybe_await(sio.enter_room(sid, room_code))
     if role == "detective":
         room["detective_sid"] = sid
@@ -589,6 +731,7 @@ async def join_role(sid, data):
         log.info(f"Unknown role: {role}")
         await sio.emit("error", {"msg": "Unknown role"}, room=sid)
 
+
 @sio.event
 async def queue_for_role(sid, data):
     """
@@ -597,7 +740,9 @@ async def queue_for_role(sid, data):
     """
     role = (data or {}).get("role")
     if role not in ("detective", "murderer"):
-        return await sio.emit("error", {"msg": "Invalid role for matchmaking."}, room=sid)
+        return await sio.emit(
+            "error", {"msg": "Invalid role for matchmaking."}, room=sid
+        )
     counterpart = "murderer" if role == "detective" else "detective"
     # if someone is waiting on the other side, match immediately
     if WAITING[counterpart]:
@@ -620,6 +765,7 @@ async def queue_for_role(sid, data):
         WAITING[role].add(sid)
         await sio.emit("system", {"msg": f"Queued for {role} matchmaking."}, room=sid)
 
+
 @sio.event
 async def set_human_character(sid, data):
     """
@@ -632,7 +778,9 @@ async def set_human_character(sid, data):
         return await sio.emit("error", {"msg": "No room for session."}, room=sid)
     room = ROOMS[room_code]
     if sid != room.get("murderer_sid"):
-        return await sio.emit("error", {"msg": "Only murderer can set character."}, room=sid)
+        return await sio.emit(
+            "error", {"msg": "Only murderer can set character."}, room=sid
+        )
 
     name = (data or {}).get("character")
     if not find_character(name):
@@ -644,6 +792,7 @@ async def set_human_character(sid, data):
     await sio.emit("character_locked", {"character": name}, room=sid)
     # Optional broadcast (filtered client-side)
     await sio.emit("system", {"msg": f"Human now controls: {name}."}, room=room_code)
+
 
 @sio.event
 async def ask(sid, data):
@@ -660,7 +809,7 @@ async def ask(sid, data):
     log.info(f"Detective SID: {room.get('detective_sid')}")
     log.info(f"Murderer SID: {room.get('murderer_sid')}")
     log.info(f"Human character: {room.get('human_character')}")
-    
+
     if sid != room.get("detective_sid"):
         print(f"ERROR: {sid} is not detective")
         return await sio.emit("error", {"msg": "Only detective can ask."}, room=sid)
@@ -668,7 +817,9 @@ async def ask(sid, data):
     character = (data or {}).get("character")
     question = ((data or {}).get("question") or "").strip()
     if not character or not question:
-        return await sio.emit("error", {"msg": "Missing character or question."}, room=sid)
+        return await sio.emit(
+            "error", {"msg": "Missing character or question."}, room=sid
+        )
 
     log.info(f"Question for {character}: {question}")
     log.info(
@@ -676,7 +827,8 @@ async def ask(sid, data):
             "routing_check": {
                 "room_human": normalize_name(room.get("human_character")),
                 "incoming": normalize_name(character),
-                "match": normalize_name(room.get("human_character")) == normalize_name(character),
+                "match": normalize_name(room.get("human_character"))
+                == normalize_name(character),
                 "has_murderer": bool(room.get("murderer_sid")),
             }
         }
@@ -684,8 +836,10 @@ async def ask(sid, data):
 
     # Record question in transcript (best-effort)
     try:
-        if 'db_add_transcript_entry' in globals() and db_add_transcript_entry:
-            db_add_transcript_entry(room_code, "Detective", question, character=character)
+        if "db_add_transcript_entry" in globals() and db_add_transcript_entry:
+            db_add_transcript_entry(
+                room_code, "Detective", question, character=character
+            )
     except Exception as e:
         log.info(f"DB add_transcript_entry(question) failed: {e}")
 
@@ -693,7 +847,9 @@ async def ask(sid, data):
     before_len = len(room["memory"].get_clues())
 
     # If human controls this character, forward to murderer and await reply
-    if normalize_name(room.get("human_character")) == normalize_name(character) and room.get("murderer_sid"):
+    if normalize_name(room.get("human_character")) == normalize_name(
+        character
+    ) and room.get("murderer_sid"):
         log.info(f"Forwarding to human murderer for {character}")
         corr_id = uuid.uuid4().hex
         fut = asyncio.get_event_loop().create_future()
@@ -714,30 +870,41 @@ async def ask(sid, data):
             PENDING.pop(corr_id, None)
         # Extract clues from human reply and add to memory
         if answer:
-            await postprocess_human_answer(room_code, character, answer, room["memory"])  # best-effort
+            await postprocess_human_answer(
+                room_code, character, answer, room["memory"]
+            )  # best-effort
     else:
         # AI handles it
         log.info(f"Using AI for {character}")
         agent = find_character(character)
         # Route through controller with structured ops; fallback handled inside
         from logic.controller import generate_structured_answer, apply_ops
-        answer, ops = await generate_structured_answer(room_code, agent, character, question, room["memory"])  # type: ignore
-        changes = apply_ops(room_code, character, ops, room["memory"])  # persist any state changes
+
+        answer, ops = await generate_structured_answer(
+            room_code, agent, character, question, room["memory"]
+        )  # type: ignore
+        changes = apply_ops(
+            room_code, character, ops, room["memory"]
+        )  # persist any state changes
 
     # Send answer back to detective
     if room.get("detective_sid"):
-        await sio.emit("answer", {"character": character, "answer": answer}, room=room["detective_sid"])
+        await sio.emit(
+            "answer",
+            {"character": character, "answer": answer},
+            room=room["detective_sid"],
+        )
 
     # Record answer in transcript (best-effort)
     try:
-        if 'db_add_transcript_entry' in globals() and db_add_transcript_entry:
+        if "db_add_transcript_entry" in globals() and db_add_transcript_entry:
             db_add_transcript_entry(room_code, character, answer, character=character)
     except Exception as e:
         log.info(f"DB add_transcript_entry(answer) failed: {e}")
 
     # Persist any new clues to DB
     try:
-        if 'db_add_clue' in globals() and db_add_clue:
+        if "db_add_clue" in globals() and db_add_clue:
             after_clues = room["memory"].get_clues()
             new_items = after_clues[before_len:]
             for c in new_items:
@@ -754,15 +921,16 @@ async def ask(sid, data):
     # Tell clients to refresh clues (your GUI will still call GET /clues)
     await sio.emit("clues_updated", {}, room=room_code)
     try:
-        if 'changes' in locals():
-            if changes.get('evidence'):
+        if "changes" in locals():
+            if changes.get("evidence"):
                 await sio.emit("evidence_updated", {}, room=room_code)
-            if changes.get('timeline'):
+            if changes.get("timeline"):
                 await sio.emit("timeline_updated", {}, room=room_code)
-            if changes.get('alibis'):
+            if changes.get("alibis"):
                 await sio.emit("alibis_updated", {}, room=room_code)
     except Exception:
         pass
+
 
 @sio.event
 async def murderer_answer(sid, data):
@@ -783,6 +951,7 @@ async def murderer_answer(sid, data):
     if fut and not fut.done():
         fut.set_result(ans)
 
+
 @sio.event
 async def murderer_ack(sid, data):
     """
@@ -791,5 +960,6 @@ async def murderer_ack(sid, data):
     """
     corr_id = (data or {}).get("correlation_id")
     log.info(f"MURDERER_ACK sid={sid} corr_id={corr_id}")
+
 
 # ci: trigger render deploy
