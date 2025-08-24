@@ -327,6 +327,7 @@ async def debug_get_room_http(code: str):
 async def debug_rooms_columns():
     return {"error": "disabled"}
 
+
 @app.post("/debug/fix_evidence_extensions")
 async def debug_fix_evidence_extensions(code: Optional[str] = None):
     try:
@@ -629,7 +630,7 @@ async def create_room(sid, data):
             ev_type="item",
             location="Bathroom cabinet",
             notes="Trace residue on needle",
-            is_discovered=False,
+            is_discovered=True,  # Temporarily set to true for testing
             thumbnail_url="/evidence/syringe_thumb.png",
             media_url="/evidence/syringe.png",
         )
@@ -639,7 +640,7 @@ async def create_room(sid, data):
             ev_type="video",
             location="North Park gate",
             notes="Figure entering gate at 21:03",
-            is_discovered=False,
+            is_discovered=True,  # Temporarily set to true for testing
             thumbnail_url="/evidence/park_footage_thumb.png",
             media_url="/evidence/park_footage.mp4",
         )
@@ -649,7 +650,7 @@ async def create_room(sid, data):
             ev_type="item",
             location="Study",
             notes="Monogrammed initial; faint stain",
-            is_discovered=False,
+            is_discovered=True,  # Temporarily set to true for testing
             thumbnail_url="/evidence/hanky_thumb.png",
             media_url="/evidence/hanky.png",
         )
