@@ -616,6 +616,36 @@ def get_credibility_counts(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
         return False, []
 
 
+def fix_evidence_extensions(room_code: Optional[str] = None) -> Tuple[bool, int]:
+    """Replace .jpg extensions with .png in thumbnail/media URLs for existing rows.
+    If room_code is provided, restrict to that room. Returns (ok, updated_count).
+    """
+    if not supabase:
+        return False, 0
+    try:
+        sel = supabase.table("evidence").select("id,room_code,thumbnail_url,media_url")
+        if room_code:
+            sel = sel.eq("room_code", room_code)
+        res = sel.execute()
+        rows: List[Dict[str, Any]] = getattr(res, "data", []) or []
+        updated = 0
+        for r in rows:
+            eid = r.get("id")
+            t = (r.get("thumbnail_url") or "")
+            m = (r.get("media_url") or "")
+            new_t = t.replace(".jpg", ".png") if t.endswith(".jpg") else t
+            new_m = m.replace(".jpg", ".png") if m.endswith(".jpg") else m
+            if new_t != t or new_m != m:
+                supabase.table("evidence").update(
+                    {"thumbnail_url": new_t or None, "media_url": new_m or None}
+                ).eq("id", eid).execute()
+                updated += 1
+        return True, updated
+    except Exception as e:
+        print("DB fix_evidence_extensions warning:", e)
+        return False, 0
+
+
 def get_alibis_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
     if not supabase:
         return False, []

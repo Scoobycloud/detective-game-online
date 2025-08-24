@@ -327,6 +327,22 @@ async def debug_get_room_http(code: str):
 async def debug_rooms_columns():
     return {"error": "disabled"}
 
+@app.post("/debug/fix_evidence_extensions")
+async def debug_fix_evidence_extensions(code: Optional[str] = None):
+    try:
+        from db import fix_evidence_extensions as _fix  # type: ignore
+    except Exception:
+        _fix = None  # type: ignore
+    try:
+        if not _fix:
+            return {"error": "db_unavailable"}
+        ok, n = _fix(code)
+        if not ok:
+            return {"error": "update_failed"}
+        return {"ok": True, "updated": n}
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @app.get("/murderer")
 async def get_murderer_page():
@@ -614,8 +630,8 @@ async def create_room(sid, data):
             location="Bathroom cabinet",
             notes="Trace residue on needle",
             is_discovered=False,
-            thumbnail_url="/evidence/syringe_thumb.jpg",
-            media_url="/evidence/syringe.jpg",
+            thumbnail_url="/evidence/syringe_thumb.png",
+            media_url="/evidence/syringe.png",
         )
         db_insert_evidence(
             code,
@@ -624,7 +640,7 @@ async def create_room(sid, data):
             location="North Park gate",
             notes="Figure entering gate at 21:03",
             is_discovered=False,
-            thumbnail_url="/evidence/park_footage_thumb.jpg",
+            thumbnail_url="/evidence/park_footage_thumb.png",
             media_url="/evidence/park_footage.mp4",
         )
         db_insert_evidence(
@@ -634,8 +650,8 @@ async def create_room(sid, data):
             location="Study",
             notes="Monogrammed initial; faint stain",
             is_discovered=False,
-            thumbnail_url="/evidence/hanky_thumb.jpg",
-            media_url="/evidence/hanky.jpg",
+            thumbnail_url="/evidence/hanky_thumb.png",
+            media_url="/evidence/hanky.png",
         )
         # seed basic alibis
         db_insert_alibi(
