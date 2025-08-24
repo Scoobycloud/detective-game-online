@@ -566,6 +566,31 @@ def find_undiscovered_evidence_by_location(
         return False, None
 
 
+def find_any_evidence_by_location(
+    room_code: str, location_query: str
+) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Find any evidence (discovered or not) by location substring match."""
+    if not supabase:
+        return False, None
+    try:
+        res = (
+            supabase.table("evidence")
+            .select(
+                "id,title,type,location,is_discovered,notes,thumbnail_url,media_url"
+            )
+            .eq("room_code", room_code)
+            .ilike("location", f"%{location_query}%")
+            .order("created_at", desc=False)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", []) or []
+        return True, rows[0] if rows else None
+    except Exception as e:
+        print("DB find_any_evidence_by_location warning:", e)
+        return False, None
+
+
 def mark_evidence_discovered(
     room_code: str, evidence_id: str
 ) -> Tuple[bool, Optional[str]]:

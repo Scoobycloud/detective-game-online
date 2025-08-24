@@ -240,6 +240,7 @@ async def search_location_http(code: str, request: Request):
     try:
         from db import (
             find_undiscovered_evidence_by_location as _find,
+            find_any_evidence_by_location as _find_any,
             mark_evidence_discovered as _mark,
         )
     except Exception:
@@ -252,6 +253,15 @@ async def search_location_http(code: str, request: Request):
         if not ok:
             return {"error": "db_unavailable"}
         if not item:
+            # fallback: if any match exists (already discovered), return it so UI can open modal
+            any_item = None
+            try:
+                if "_find_any" in locals() and _find_any:
+                    ok2, any_item = _find_any(code, location)
+            except Exception:
+                any_item = None
+            if any_item:
+                return {"found": True, "evidence": any_item}
             return {"found": False}
         # mark discovered
         _mark(code, item.get("id"))
