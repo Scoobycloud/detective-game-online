@@ -989,6 +989,34 @@ async def murderer_ack(sid, data):
     log.info(f"MURDERER_ACK sid={sid} corr_id={corr_id}")
 
 
+@app.get("/debug/openai-status")
+async def check_openai_status():
+    """Check if OpenAI API key is configured."""
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {"status": "error", "message": "OpenAI API key not configured"}
+
+        import openai
+        client = openai.AsyncOpenAI(api_key=api_key)
+
+        # Test the API with a simple request
+        response = await client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": "Say 'OpenAI is working'"}],
+            max_tokens=10
+        )
+
+        return {
+            "status": "ok",
+            "message": "OpenAI API is configured and working",
+            "response": response.choices[0].message.content.strip()
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": f"OpenAI test failed: {str(e)}"}
+
+
 @app.post("/rooms/{code}/generate-game")
 async def generate_game(code: str, request: Request):
     """Generate a complete murder mystery game from a narrative."""
@@ -1169,9 +1197,15 @@ CRITICAL INSTRUCTIONS:
 
         except ImportError:
             raise HTTPException(status_code=500, detail="OpenAI library not available")
+        except openai.OpenAIError as e:
+            log.error(f"OpenAI API error: {e}")
+            raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
+        except json.JSONDecodeError as e:
+            log.error(f"AI response parsing error: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {str(e)}")
         except Exception as e:
             log.error(f"AI processing error: {e}")
-            raise HTTPException(status_code=500, detail="Failed to process narrative")
+            raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
     except HTTPException:
         raise
