@@ -1000,7 +1000,9 @@ async def generate_game(code: str, request: Request):
             raise HTTPException(status_code=400, detail="Narrative text is required")
 
         if len(narrative) < 50:
-            raise HTTPException(status_code=400, detail="Narrative must be at least 50 characters long")
+            raise HTTPException(
+                status_code=400, detail="Narrative must be at least 50 characters long"
+            )
 
         if code not in ROOMS:
             raise HTTPException(status_code=404, detail="Room not found")
@@ -1008,9 +1010,12 @@ async def generate_game(code: str, request: Request):
         # Import OpenAI for narrative processing
         try:
             import openai
+
             openai_api_key = os.getenv("OPENAI_API_KEY")
             if not openai_api_key:
-                raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+                raise HTTPException(
+                    status_code=500, detail="OpenAI API key not configured"
+                )
 
             openai.api_key = openai_api_key
 
@@ -1035,7 +1040,7 @@ Make sure the content creates a cohesive murder mystery game."""
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
             )
 
             ai_response = response.choices[0].message.content.strip()
@@ -1045,13 +1050,25 @@ Make sure the content creates a cohesive murder mystery game."""
                 game_data = json.loads(ai_response)
             except json.JSONDecodeError as e:
                 log.error(f"Failed to parse AI response: {e}")
-                raise HTTPException(status_code=500, detail="Failed to parse AI response")
+                raise HTTPException(
+                    status_code=500, detail="Failed to parse AI response"
+                )
 
             # Validate the response structure
-            required_keys = ["characters", "evidence", "timeline_events", "clues", "alibis"]
+            required_keys = [
+                "characters",
+                "evidence",
+                "timeline_events",
+                "clues",
+                "alibis",
+            ]
             if not all(key in game_data for key in required_keys):
-                log.error(f"AI response missing required keys: {list(game_data.keys())}")
-                raise HTTPException(status_code=500, detail="AI response missing required game elements")
+                log.error(
+                    f"AI response missing required keys: {list(game_data.keys())}"
+                )
+                raise HTTPException(
+                    status_code=500, detail="AI response missing required game elements"
+                )
 
             evidence_count = 0
             clues_count = 0
@@ -1064,6 +1081,7 @@ Make sure the content creates a cohesive murder mystery game."""
                 for item in game_data["evidence"]:
                     try:
                         from db import insert_evidence as _insert_evidence
+
                         if _insert_evidence:
                             ok, _ = _insert_evidence(
                                 code,
@@ -1071,7 +1089,7 @@ Make sure the content creates a cohesive murder mystery game."""
                                 ev_type=item.get("type", "item"),
                                 location=item.get("location", "Unknown"),
                                 notes=item.get("notes", ""),
-                                is_discovered=item.get("is_discovered", False)
+                                is_discovered=item.get("is_discovered", False),
                             )
                             if ok:
                                 evidence_count += 1
@@ -1083,12 +1101,13 @@ Make sure the content creates a cohesive murder mystery game."""
                 for item in game_data["clues"]:
                     try:
                         from db import add_clue as _add_clue
+
                         if _add_clue:
                             ok, _ = _add_clue(
                                 code,
                                 item.get("text", ""),
                                 item.get("type", "general"),
-                                item.get("source", "unknown")
+                                item.get("source", "unknown"),
                             )
                             if ok:
                                 clues_count += 1
@@ -1100,13 +1119,14 @@ Make sure the content creates a cohesive murder mystery game."""
                 for item in game_data["timeline_events"]:
                     try:
                         from db import insert_timeline_event as _insert_timeline
+
                         if _insert_timeline:
                             ok, _ = _insert_timeline(
                                 code,
                                 tstamp=item.get("tstamp", "Unknown time"),
                                 phase=item.get("phase", "investigation"),
                                 label=item.get("label", "Event"),
-                                details=item.get("details", "")
+                                details=item.get("details", ""),
                             )
                     except Exception as e:
                         log.error(f"Failed to insert timeline event: {e}")
@@ -1116,13 +1136,14 @@ Make sure the content creates a cohesive murder mystery game."""
                 for item in game_data["alibis"]:
                     try:
                         from db import insert_alibi as _insert_alibi
+
                         if _insert_alibi:
                             ok, _ = _insert_alibi(
                                 code,
                                 character=item.get("character", "Unknown"),
                                 timeframe=item.get("timeframe", "Unknown"),
                                 account=item.get("account", ""),
-                                credibility_score=75  # Default credibility
+                                credibility_score=75,  # Default credibility
                             )
                     except Exception as e:
                         log.error(f"Failed to insert alibi: {e}")
@@ -1136,7 +1157,7 @@ Make sure the content creates a cohesive murder mystery game."""
                 "success": True,
                 "evidence_count": evidence_count,
                 "clues_count": clues_count,
-                "message": f"Game generated successfully with {evidence_count} evidence items and {clues_count} clues"
+                "message": f"Game generated successfully with {evidence_count} evidence items and {clues_count} clues",
             }
 
         except ImportError:
