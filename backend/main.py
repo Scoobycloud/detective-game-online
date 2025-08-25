@@ -1037,15 +1037,30 @@ async def generate_game(code: str, request: Request):
             from db import create_room as _create_room
             from db import get_evidence_for_room as _get_evidence_for_room
 
+            log.info(f"Game generation: Checking/creating room {code}")
+
             if _create_room and _get_evidence_for_room:
                 # First try to get existing room data
                 ok, items = _get_evidence_for_room(code)
+                log.info(f"Room {code} check result: ok={ok}, items_count={len(items) if items else 0}")
+
                 if not ok:
                     # Room doesn't exist, create it
+                    log.info(f"Creating room {code}")
                     create_ok, create_info = _create_room(code)
+                    log.info(f"Room creation result: ok={create_ok}, info={create_info}")
+
                     if not create_ok:
                         raise HTTPException(status_code=500, detail="Failed to create room")
+                else:
+                    log.info(f"Room {code} already exists")
+            else:
+                log.error("Database functions not available")
+                raise HTTPException(status_code=500, detail="Database not available")
 
+        except ImportError as e:
+            log.error(f"Database import error: {e}")
+            raise HTTPException(status_code=500, detail="Database module not found")
         except Exception as e:
             log.error(f"Room validation/creation error: {e}")
             raise HTTPException(status_code=500, detail="Database error")
