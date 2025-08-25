@@ -998,19 +998,20 @@ async def check_openai_status():
             return {"status": "error", "message": "OpenAI API key not configured"}
 
         import openai
+
         openai.api_key = api_key
 
         # Test the API with a simple request
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": "Say 'OpenAI is working'"}],
-            max_tokens=10
+            max_tokens=10,
         )
 
         return {
             "status": "ok",
             "message": "OpenAI API is configured and working",
-            "response": response.choices[0].message.content.strip()
+            "response": response.choices[0].message.content.strip(),
         }
 
     except Exception as e:
@@ -1042,16 +1043,22 @@ async def generate_game(code: str, request: Request):
             if _create_room and _get_evidence_for_room:
                 # First try to get existing room data
                 ok, items = _get_evidence_for_room(code)
-                log.info(f"Room {code} check result: ok={ok}, items_count={len(items) if items else 0}")
+                log.info(
+                    f"Room {code} check result: ok={ok}, items_count={len(items) if items else 0}"
+                )
 
                 if not ok:
                     # Room doesn't exist, create it
                     log.info(f"Creating room {code}")
                     create_ok, create_info = _create_room(code)
-                    log.info(f"Room creation result: ok={create_ok}, info={create_info}")
+                    log.info(
+                        f"Room creation result: ok={create_ok}, info={create_info}"
+                    )
 
                     if not create_ok:
-                        raise HTTPException(status_code=500, detail="Failed to create room")
+                        raise HTTPException(
+                            status_code=500, detail="Failed to create room"
+                        )
                 else:
                     log.info(f"Room {code} already exists")
             else:
@@ -1072,10 +1079,11 @@ async def generate_game(code: str, request: Request):
             openai_api_key = os.getenv("OPENAI_API_KEY")
             if not openai_api_key:
                 raise HTTPException(
-                    status_code=500, detail="OpenAI API key not configured"
+                    status_code=500, detail="OpenAI API key not configured on server"
                 )
 
             openai.api_key = openai_api_key
+            log.info("OpenAI API key configured successfully")
 
             # Create the AI prompt for narrative processing
             prompt = f"""You are an expert murder mystery game designer. Analyze this narrative and generate comprehensive game content for a detective game.
@@ -1099,20 +1107,25 @@ CRITICAL INSTRUCTIONS:
 - Generate 3-5 evidence items, 4-6 clues, 5-8 timeline events, and alibis for each suspect"""
 
             # Call OpenAI API using synchronous client (for older library versions)
+            log.info(f"Sending narrative to OpenAI (length: {len(narrative)} chars)")
             openai.api_key = openai_api_key
 
             response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
             )
 
             ai_response = response.choices[0].message.content.strip()
+            log.info(f"Received AI response (length: {len(ai_response)} chars)")
+            log.info(f"AI response preview: {ai_response[:200]}...")
 
             # Parse the JSON response
+            log.info(f"Attempting to parse AI response as JSON")
             try:
                 game_data = json.loads(ai_response)
+                log.info(f"Successfully parsed JSON with keys: {list(game_data.keys())}")
             except json.JSONDecodeError as e:
                 log.error(f"Failed to parse AI response: {e}")
                 raise HTTPException(
@@ -1129,11 +1142,14 @@ CRITICAL INSTRUCTIONS:
             ]
             if not all(key in game_data for key in required_keys):
                 log.error(
-                    f"AI response missing required keys: {list(game_data.keys())}"
+                    f"AI response missing required keys. Has: {list(game_data.keys())}, Needs: {required_keys}"
                 )
+                log.error(f"AI response content: {str(game_data)[:500]}...")
                 raise HTTPException(
                     status_code=500, detail="AI response missing required game elements"
                 )
+
+            log.info(f"AI response validation passed. Evidence: {len(game_data.get('evidence', []))}, Clues: {len(game_data.get('clues', []))}")
 
             evidence_count = 0
             clues_count = 0
@@ -1142,13 +1158,15 @@ CRITICAL INSTRUCTIONS:
             # For now, we'll focus on evidence, clues, timeline, and alibis
 
             # Insert evidence
+            log.info(f"Starting evidence insertion. Items: {len(game_data.get('evidence', []))}")
             if game_data.get("evidence"):
-                for item in game_data["evidence"]:
+                for i, item in enumerate(game_data["evidence"]):
                     try:
                         from db import insert_evidence as _insert_evidence
+                        log.info(f"Inserting evidence {i+1}: {item.get('title', 'Unknown')}")
 
                         if _insert_evidence:
-                            ok, _ = _insert_evidence(
+                            ok, result = _insert_evidence(
                                 code,
                                 title=item.get("title", "Unknown Evidence"),
                                 ev_type=item.get("type", "item"),
@@ -1156,10 +1174,11 @@ CRITICAL INSTRUCTIONS:
                                 notes=item.get("notes", ""),
                                 is_discovered=item.get("is_discovered", False),
                             )
+                            log.info(f"Evidence insertion result: ok={ok}, result={result}")
                             if ok:
                                 evidence_count += 1
                     except Exception as e:
-                        log.error(f"Failed to insert evidence: {e}")
+                        log.error(f"Failed to insert evidence {i+1}: {e}")
 
             # Insert clues
             if game_data.get("clues"):
@@ -1232,7 +1251,9 @@ CRITICAL INSTRUCTIONS:
             raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
         except json.JSONDecodeError as e:
             log.error(f"AI response parsing error: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to parse AI response: {str(e)}"
+            )
         except Exception as e:
             log.error(f"AI processing error: {e}")
             raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
