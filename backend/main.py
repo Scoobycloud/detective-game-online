@@ -1,5 +1,5 @@
 # backend/main.py
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -987,6 +987,169 @@ async def murderer_ack(sid, data):
     """
     corr_id = (data or {}).get("correlation_id")
     log.info(f"MURDERER_ACK sid={sid} corr_id={corr_id}")
+
+
+@app.post("/rooms/{code}/generate-game")
+async def generate_game(code: str, request: Request):
+    """Generate a complete murder mystery game from a narrative."""
+    try:
+        data = await request.json()
+        narrative = data.get("narrative", "").strip()
+
+        if not narrative:
+            raise HTTPException(status_code=400, detail="Narrative text is required")
+
+        if len(narrative) < 50:
+            raise HTTPException(status_code=400, detail="Narrative must be at least 50 characters long")
+
+        if code not in ROOMS:
+            raise HTTPException(status_code=404, detail="Room not found")
+
+        # Import OpenAI for narrative processing
+        try:
+            import openai
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+            openai.api_key = openai_api_key
+
+            # Create the AI prompt for narrative processing
+            prompt = f"""You are a murder mystery game generator. Analyze this narrative and generate game content:
+
+NARRATIVE: {narrative}
+
+Please respond with a JSON object containing:
+- characters: Array of character objects with name, role (victim/suspect/witness), and backstory
+- evidence: Array of evidence objects with title, type, location, notes, and is_discovered
+- timeline_events: Array of timeline objects with tstamp, phase, label, and details
+- clues: Array of clue objects with text, type, and source
+- alibis: Array of alibi objects with character, timeframe, and account
+
+Make sure the content creates a cohesive murder mystery game."""
+
+            # Call OpenAI API using new client syntax
+            client = openai.AsyncOpenAI(api_key=openai_api_key)
+
+            response = await client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=2000
+            )
+
+            ai_response = response.choices[0].message.content.strip()
+
+            # Parse the JSON response
+            try:
+                game_data = json.loads(ai_response)
+            except json.JSONDecodeError as e:
+                log.error(f"Failed to parse AI response: {e}")
+                raise HTTPException(status_code=500, detail="Failed to parse AI response")
+
+            # Validate the response structure
+            required_keys = ["characters", "evidence", "timeline_events", "clues", "alibis"]
+            if not all(key in game_data for key in required_keys):
+                log.error(f"AI response missing required keys: {list(game_data.keys())}")
+                raise HTTPException(status_code=500, detail="AI response missing required game elements")
+
+            evidence_count = 0
+            clues_count = 0
+
+            # Insert characters (this would require a characters table)
+            # For now, we'll focus on evidence, clues, timeline, and alibis
+
+            # Insert evidence
+            if game_data.get("evidence"):
+                for item in game_data["evidence"]:
+                    try:
+                        from db import insert_evidence as _insert_evidence
+                        if _insert_evidence:
+                            ok, _ = _insert_evidence(
+                                code,
+                                title=item.get("title", "Unknown Evidence"),
+                                ev_type=item.get("type", "item"),
+                                location=item.get("location", "Unknown"),
+                                notes=item.get("notes", ""),
+                                is_discovered=item.get("is_discovered", False)
+                            )
+                            if ok:
+                                evidence_count += 1
+                    except Exception as e:
+                        log.error(f"Failed to insert evidence: {e}")
+
+            # Insert clues
+            if game_data.get("clues"):
+                for item in game_data["clues"]:
+                    try:
+                        from db import add_clue as _add_clue
+                        if _add_clue:
+                            ok, _ = _add_clue(
+                                code,
+                                item.get("text", ""),
+                                item.get("type", "general"),
+                                item.get("source", "unknown")
+                            )
+                            if ok:
+                                clues_count += 1
+                    except Exception as e:
+                        log.error(f"Failed to insert clue: {e}")
+
+            # Insert timeline events
+            if game_data.get("timeline_events"):
+                for item in game_data["timeline_events"]:
+                    try:
+                        from db import insert_timeline_event as _insert_timeline
+                        if _insert_timeline:
+                            ok, _ = _insert_timeline(
+                                code,
+                                tstamp=item.get("tstamp", "Unknown time"),
+                                phase=item.get("phase", "investigation"),
+                                label=item.get("label", "Event"),
+                                details=item.get("details", "")
+                            )
+                    except Exception as e:
+                        log.error(f"Failed to insert timeline event: {e}")
+
+            # Insert alibis
+            if game_data.get("alibis"):
+                for item in game_data["alibis"]:
+                    try:
+                        from db import insert_alibi as _insert_alibi
+                        if _insert_alibi:
+                            ok, _ = _insert_alibi(
+                                code,
+                                character=item.get("character", "Unknown"),
+                                timeframe=item.get("timeframe", "Unknown"),
+                                account=item.get("account", ""),
+                                credibility_score=75  # Default credibility
+                            )
+                    except Exception as e:
+                        log.error(f"Failed to insert alibi: {e}")
+
+            # Emit socket events to notify clients
+            await sio.emit("evidence_updated", {}, room=code)
+            await sio.emit("timeline_updated", {}, room=code)
+            await sio.emit("alibis_updated", {}, room=code)
+
+            return {
+                "success": True,
+                "evidence_count": evidence_count,
+                "clues_count": clues_count,
+                "message": f"Game generated successfully with {evidence_count} evidence items and {clues_count} clues"
+            }
+
+        except ImportError:
+            raise HTTPException(status_code=500, detail="OpenAI library not available")
+        except Exception as e:
+            log.error(f"AI processing error: {e}")
+            raise HTTPException(status_code=500, detail="Failed to process narrative")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Unexpected error in generate_game: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ci: trigger render deploy

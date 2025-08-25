@@ -631,8 +631,8 @@ def fix_evidence_extensions(room_code: Optional[str] = None) -> Tuple[bool, int]
         updated = 0
         for r in rows:
             eid = r.get("id")
-            t = (r.get("thumbnail_url") or "")
-            m = (r.get("media_url") or "")
+            t = r.get("thumbnail_url") or ""
+            m = r.get("media_url") or ""
             new_t = t.replace(".jpg", ".png") if t.endswith(".jpg") else t
             new_m = m.replace(".jpg", ".png") if m.endswith(".jpg") else m
             if new_t != t or new_m != m:
