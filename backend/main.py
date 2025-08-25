@@ -1032,8 +1032,17 @@ async def generate_game(code: str, request: Request):
                 status_code=400, detail="Narrative must be at least 50 characters long"
             )
 
-        if code not in ROOMS:
-            raise HTTPException(status_code=404, detail="Room not found")
+        # Check if room exists in database instead of just in-memory storage
+        try:
+            from db import get_evidence_for_room as _get_evidence_for_room
+            if _get_evidence_for_room:
+                ok, _ = _get_evidence_for_room(code)
+                if not ok:
+                    raise HTTPException(status_code=404, detail="Room not found")
+        except Exception:
+            # If database check fails, fall back to in-memory check
+            if code not in ROOMS:
+                raise HTTPException(status_code=404, detail="Room not found")
 
         # Import OpenAI for narrative processing
         try:
