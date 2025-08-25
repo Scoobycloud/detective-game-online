@@ -1233,6 +1233,10 @@ CRITICAL INSTRUCTIONS:
             evidence_count = 0
             clues_count = 0
 
+            # Log the actual data we're trying to insert
+            log.info(f"Evidence data: {game_data.get('evidence', [])[:2]}...")  # First 2 items
+            log.info(f"Clues data: {game_data.get('clues', [])[:2]}...")  # First 2 items
+
             # Insert characters (this would require a characters table)
             # For now, we'll focus on evidence, clues, timeline, and alibis
 
@@ -1322,6 +1326,8 @@ CRITICAL INSTRUCTIONS:
             await sio.emit("evidence_updated", {}, room=code)
             await sio.emit("timeline_updated", {}, room=code)
             await sio.emit("alibis_updated", {}, room=code)
+
+            log.info(f"Game generation completed. Final counts - Evidence: {evidence_count}, Clues: {clues_count}")
 
             return {
                 "success": True,
