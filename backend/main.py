@@ -1020,18 +1020,25 @@ async def generate_game(code: str, request: Request):
             openai.api_key = openai_api_key
 
             # Create the AI prompt for narrative processing
-            prompt = f"""You are a murder mystery game generator. Analyze this narrative and generate game content:
+            prompt = f"""You are an expert murder mystery game designer. Analyze this narrative and generate comprehensive game content for a detective game.
 
 NARRATIVE: {narrative}
 
-Please respond with a JSON object containing:
-- characters: Array of character objects with name, role (victim/suspect/witness), and backstory
-- evidence: Array of evidence objects with title, type, location, notes, and is_discovered
-- timeline_events: Array of timeline objects with tstamp, phase, label, and details
-- clues: Array of clue objects with text, type, and source
-- alibis: Array of alibi objects with character, timeframe, and account
+Please respond with a JSON object containing exactly these keys:
+- characters: Array of character objects with name, role (victim/suspect/witness/housekeeper), and detailed backstory
+- evidence: Array of evidence objects with title, type (item/document/video/witness_statement), location, detailed notes, and is_discovered (set to false for discovery gameplay)
+- timeline_events: Array of timeline objects with tstamp (use format like "8:45 PM" or "2:00 PM"), phase (pre_crime/during_crime/post_discovery), label, and details
+- clues: Array of clue objects with text, type (physical/forensic/witness/testimonial), and source (who found it or who provided the info)
+- alibis: Array of alibi objects with character, timeframe, account (detailed description), and credibility_score (0-100, lower for suspicious alibis)
 
-Make sure the content creates a cohesive murder mystery game."""
+CRITICAL INSTRUCTIONS:
+- Set ALL evidence is_discovered to false for proper gameplay
+- Include the housekeeper as a witness character
+- Make alibis detailed and some suspiciously weak
+- Create clues that can be discovered through location searches
+- Ensure timeline creates clear interrogation opportunities
+- Add red herrings and false leads for engaging gameplay
+- Generate 3-5 evidence items, 4-6 clues, 5-8 timeline events, and alibis for each suspect"""
 
             # Call OpenAI API using new client syntax
             client = openai.AsyncOpenAI(api_key=openai_api_key)
