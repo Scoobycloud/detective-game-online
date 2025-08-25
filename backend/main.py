@@ -1029,10 +1029,13 @@ async def test_narrative_processing(request: Request):
             raise HTTPException(status_code=400, detail="Narrative text is required")
 
         if len(narrative) < 10:
-            raise HTTPException(status_code=400, detail="Narrative must be at least 10 characters long")
+            raise HTTPException(
+                status_code=400, detail="Narrative must be at least 10 characters long"
+            )
 
         # Import OpenAI
         import openai
+
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise HTTPException(status_code=500, detail="OpenAI API key not configured")
@@ -1065,7 +1068,7 @@ CRITICAL INSTRUCTIONS:
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=2000
+            max_tokens=2000,
         )
 
         ai_response = response.choices[0].message.content.strip()
@@ -1074,13 +1077,63 @@ CRITICAL INSTRUCTIONS:
             "narrative": narrative,
             "ai_response": ai_response,
             "response_length": len(ai_response),
-            "response_preview": ai_response[:500]
+            "response_preview": ai_response[:500],
         }
 
     except Exception as e:
+        return {"error": str(e), "error_type": type(e).__name__}
+
+
+@app.post("/debug/test-database")
+async def test_database_insertion():
+    """Test database insertion functions directly."""
+    try:
+        # Test room creation
+        from db import create_room as _create_room
+        room_ok, room_result = _create_room("test_room_123")
+        log.info(f"Room creation result: ok={room_ok}, result={room_result}")
+
+        # Test evidence insertion
+        from db import insert_evidence as _insert_evidence
+        evidence_ok, evidence_result = _insert_evidence(
+            "test_room_123",
+            title="Test Knife",
+            ev_type="item",
+            location="Kitchen",
+            notes="A bloody knife found at the scene",
+            is_discovered=False
+        )
+        log.info(f"Evidence insertion result: ok={evidence_ok}, result={evidence_result}")
+
+        # Test clue insertion
+        from db import add_clue as _add_clue
+        clue_ok, clue_result = _add_clue(
+            "test_room_123",
+            "The knife has fingerprints matching the butler",
+            "forensic",
+            "Crime Lab"
+        )
+        log.info(f"Clue insertion result: ok={clue_ok}, result={clue_result}")
+
+        # Check if data was inserted
+        from db import get_evidence_for_room as _get_evidence
+        get_ok, evidence_list = _get_evidence("test_room_123")
+        log.info(f"Evidence retrieval result: ok={get_ok}, count={len(evidence_list)}")
+
+        return {
+            "room_creation": {"ok": room_ok, "result": room_result},
+            "evidence_insertion": {"ok": evidence_ok, "result": evidence_result},
+            "clue_insertion": {"ok": clue_ok, "result": clue_result},
+            "evidence_retrieval": {"ok": get_ok, "count": len(evidence_list)},
+            "status": "Database functions tested"
+        }
+
+    except Exception as e:
+        log.error(f"Database test error: {e}")
         return {
             "error": str(e),
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "status": "Database test failed"
         }
 
 
@@ -1192,7 +1245,8 @@ CRITICAL INSTRUCTIONS:
 
             # Sometimes AI includes extra text before/after JSON - try to extract JSON
             import re
-            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+
+            json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
             if json_match:
                 ai_response = json_match.group()
                 log.info(f"Extracted JSON content from AI response")
@@ -1234,8 +1288,12 @@ CRITICAL INSTRUCTIONS:
             clues_count = 0
 
             # Log the actual data we're trying to insert
-            log.info(f"Evidence data: {game_data.get('evidence', [])[:2]}...")  # First 2 items
-            log.info(f"Clues data: {game_data.get('clues', [])[:2]}...")  # First 2 items
+            log.info(
+                f"Evidence data: {game_data.get('evidence', [])[:2]}..."
+            )  # First 2 items
+            log.info(
+                f"Clues data: {game_data.get('clues', [])[:2]}..."
+            )  # First 2 items
 
             # Insert characters (this would require a characters table)
             # For now, we'll focus on evidence, clues, timeline, and alibis
@@ -1327,7 +1385,9 @@ CRITICAL INSTRUCTIONS:
             await sio.emit("timeline_updated", {}, room=code)
             await sio.emit("alibis_updated", {}, room=code)
 
-            log.info(f"Game generation completed. Final counts - Evidence: {evidence_count}, Clues: {clues_count}")
+            log.info(
+                f"Game generation completed. Final counts - Evidence: {evidence_count}, Clues: {clues_count}"
+            )
 
             return {
                 "success": True,
