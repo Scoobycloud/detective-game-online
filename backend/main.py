@@ -998,10 +998,10 @@ async def check_openai_status():
             return {"status": "error", "message": "OpenAI API key not configured"}
 
         import openai
-        client = openai.AsyncOpenAI(api_key=api_key)
+        openai.api_key = api_key
 
         # Test the API with a simple request
-        response = await client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": "Say 'OpenAI is working'"}],
             max_tokens=10
@@ -1098,14 +1098,14 @@ CRITICAL INSTRUCTIONS:
 - Add red herrings and false leads for engaging gameplay
 - Generate 3-5 evidence items, 4-6 clues, 5-8 timeline events, and alibis for each suspect"""
 
-            # Call OpenAI API using new client syntax
-            client = openai.AsyncOpenAI(api_key=openai_api_key)
+            # Call OpenAI API using synchronous client (for older library versions)
+            openai.api_key = openai_api_key
 
-            response = await client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=2000
             )
 
             ai_response = response.choices[0].message.content.strip()
