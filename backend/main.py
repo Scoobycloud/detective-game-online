@@ -1189,6 +1189,15 @@ CRITICAL INSTRUCTIONS:
 
             # Parse the JSON response
             log.info(f"Attempting to parse AI response as JSON")
+
+            # Sometimes AI includes extra text before/after JSON - try to extract JSON
+            import re
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                ai_response = json_match.group()
+                log.info(f"Extracted JSON content from AI response")
+            else:
+                log.info(f"No JSON found in AI response, using as-is")
             try:
                 game_data = json.loads(ai_response)
                 log.info(
