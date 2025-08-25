@@ -1018,6 +1018,72 @@ async def check_openai_status():
         return {"status": "error", "message": f"OpenAI test failed: {str(e)}"}
 
 
+@app.post("/debug/test-narrative")
+async def test_narrative_processing(request: Request):
+    """Test narrative processing and return raw AI response."""
+    try:
+        data = await request.json()
+        narrative = data.get("narrative", "").strip()
+
+        if not narrative:
+            raise HTTPException(status_code=400, detail="Narrative text is required")
+
+        if len(narrative) < 10:
+            raise HTTPException(status_code=400, detail="Narrative must be at least 10 characters long")
+
+        # Import OpenAI
+        import openai
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+        openai.api_key = api_key
+
+        # Use the same prompt as the main endpoint
+        prompt = f"""You are an expert murder mystery game designer. Analyze this narrative and generate comprehensive game content for a detective game.
+
+NARRATIVE: {narrative}
+
+Please respond with a JSON object containing exactly these keys:
+- characters: Array of character objects with name, role (victim/suspect/witness/housekeeper), and detailed backstory
+- evidence: Array of evidence objects with title, type (item/document/video/witness_statement), location, detailed notes, and is_discovered (set to false for discovery gameplay)
+- timeline_events: Array of timeline objects with tstamp (use format like "8:45 PM" or "2:00 PM"), phase (pre_crime/during_crime/post_discovery), label, and details
+- clues: Array of clue objects with text, type (physical/forensic/witness/testimonial), and source (who found it or who provided the info)
+- alibis: Array of alibi objects with character, timeframe, account (detailed description), and credibility_score (0-100, lower for suspicious alibis)
+
+CRITICAL INSTRUCTIONS:
+- Set ALL evidence is_discovered to false for proper gameplay
+- Include the housekeeper as a witness character
+- Make alibis detailed and some suspiciously weak
+- Create clues that can be discovered through location searches
+- Ensure timeline creates clear interrogation opportunities
+- Add red herrings and false leads for engaging gameplay
+- Generate 3-5 evidence items, 4-6 clues, 5-8 timeline events, and alibis for each suspect"""
+
+        # Call OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2000
+        )
+
+        ai_response = response.choices[0].message.content.strip()
+
+        return {
+            "narrative": narrative,
+            "ai_response": ai_response,
+            "response_length": len(ai_response),
+            "response_preview": ai_response[:500]
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
 @app.post("/rooms/{code}/generate-game")
 async def generate_game(code: str, request: Request):
     """Generate a complete murder mystery game from a narrative."""
@@ -1125,7 +1191,9 @@ CRITICAL INSTRUCTIONS:
             log.info(f"Attempting to parse AI response as JSON")
             try:
                 game_data = json.loads(ai_response)
-                log.info(f"Successfully parsed JSON with keys: {list(game_data.keys())}")
+                log.info(
+                    f"Successfully parsed JSON with keys: {list(game_data.keys())}"
+                )
             except json.JSONDecodeError as e:
                 log.error(f"Failed to parse AI response: {e}")
                 raise HTTPException(
@@ -1149,7 +1217,9 @@ CRITICAL INSTRUCTIONS:
                     status_code=500, detail="AI response missing required game elements"
                 )
 
-            log.info(f"AI response validation passed. Evidence: {len(game_data.get('evidence', []))}, Clues: {len(game_data.get('clues', []))}")
+            log.info(
+                f"AI response validation passed. Evidence: {len(game_data.get('evidence', []))}, Clues: {len(game_data.get('clues', []))}"
+            )
 
             evidence_count = 0
             clues_count = 0
@@ -1158,12 +1228,17 @@ CRITICAL INSTRUCTIONS:
             # For now, we'll focus on evidence, clues, timeline, and alibis
 
             # Insert evidence
-            log.info(f"Starting evidence insertion. Items: {len(game_data.get('evidence', []))}")
+            log.info(
+                f"Starting evidence insertion. Items: {len(game_data.get('evidence', []))}"
+            )
             if game_data.get("evidence"):
                 for i, item in enumerate(game_data["evidence"]):
                     try:
                         from db import insert_evidence as _insert_evidence
-                        log.info(f"Inserting evidence {i+1}: {item.get('title', 'Unknown')}")
+
+                        log.info(
+                            f"Inserting evidence {i + 1}: {item.get('title', 'Unknown')}"
+                        )
 
                         if _insert_evidence:
                             ok, result = _insert_evidence(
@@ -1174,11 +1249,13 @@ CRITICAL INSTRUCTIONS:
                                 notes=item.get("notes", ""),
                                 is_discovered=item.get("is_discovered", False),
                             )
-                            log.info(f"Evidence insertion result: ok={ok}, result={result}")
+                            log.info(
+                                f"Evidence insertion result: ok={ok}, result={result}"
+                            )
                             if ok:
                                 evidence_count += 1
                     except Exception as e:
-                        log.error(f"Failed to insert evidence {i+1}: {e}")
+                        log.error(f"Failed to insert evidence {i + 1}: {e}")
 
             # Insert clues
             if game_data.get("clues"):
