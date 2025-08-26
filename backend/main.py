@@ -1091,33 +1091,39 @@ async def test_database_insertion():
     try:
         # Test room creation
         from db import create_room as _create_room
+
         room_ok, room_result = _create_room("test_room_123")
         log.info(f"Room creation result: ok={room_ok}, result={room_result}")
 
         # Test evidence insertion
         from db import insert_evidence as _insert_evidence
+
         evidence_ok, evidence_result = _insert_evidence(
             "test_room_123",
             title="Test Knife",
             ev_type="item",
             location="Kitchen",
             notes="A bloody knife found at the scene",
-            is_discovered=False
+            is_discovered=False,
         )
-        log.info(f"Evidence insertion result: ok={evidence_ok}, result={evidence_result}")
+        log.info(
+            f"Evidence insertion result: ok={evidence_ok}, result={evidence_result}"
+        )
 
         # Test clue insertion
         from db import add_clue as _add_clue
+
         clue_ok, clue_result = _add_clue(
             "test_room_123",
             "The knife has fingerprints matching the butler",
             "forensic",
-            "Crime Lab"
+            "Crime Lab",
         )
         log.info(f"Clue insertion result: ok={clue_ok}, result={clue_result}")
 
         # Check if data was inserted
         from db import get_evidence_for_room as _get_evidence
+
         get_ok, evidence_list = _get_evidence("test_room_123")
         log.info(f"Evidence retrieval result: ok={get_ok}, count={len(evidence_list)}")
 
@@ -1126,7 +1132,7 @@ async def test_database_insertion():
             "evidence_insertion": {"ok": evidence_ok, "result": evidence_result},
             "clue_insertion": {"ok": clue_ok, "result": clue_result},
             "evidence_retrieval": {"ok": get_ok, "count": len(evidence_list)},
-            "status": "Database functions tested"
+            "status": "Database functions tested",
         }
 
     except Exception as e:
@@ -1134,7 +1140,7 @@ async def test_database_insertion():
         return {
             "error": str(e),
             "error_type": type(e).__name__,
-            "status": "Database test failed"
+            "status": "Database test failed",
         }
 
 
@@ -1336,13 +1342,24 @@ CRITICAL INSTRUCTIONS:
                     try:
                         from db import add_clue as _add_clue
 
+                        # Map AI clue types to database constraint types
+                        clue_type = item.get("type", "general")
+                        if clue_type not in ["IMPORTANT", "CONTRADICTION"]:
+                            if "contradict" in clue_type.lower() or "conflict" in clue_type.lower():
+                                clue_type = "CONTRADICTION"
+                            else:
+                                clue_type = "IMPORTANT"  # Default to IMPORTANT for most clues
+
+                        log.info(f"Inserting clue: {item.get('text', '')[:50]}... (type: {clue_type})")
+
                         if _add_clue:
                             ok, _ = _add_clue(
                                 code,
                                 item.get("text", ""),
-                                item.get("type", "general"),
+                                clue_type,
                                 item.get("source", "unknown"),
                             )
+                            log.info(f"Clue insertion result: ok={ok}")
                             if ok:
                                 clues_count += 1
                     except Exception as e:
