@@ -1313,10 +1313,12 @@ CRITICAL INSTRUCTIONS:
             if game_data.get("evidence"):
                 for i, item in enumerate(game_data["evidence"]):
                     try:
+                        log.info(f"Loading db module for evidence insertion...")
                         from db import insert_evidence as _insert_evidence
+                        log.info(f"DB function loaded: {_insert_evidence is not None}")
 
                         log.info(
-                            f"Inserting evidence {i + 1}: {item.get('title', 'Unknown')}"
+                            f"Inserting evidence {i + 1}: {item.get('title', 'Unknown')} into room {code}"
                         )
 
                         if _insert_evidence:
@@ -1329,12 +1331,20 @@ CRITICAL INSTRUCTIONS:
                                 is_discovered=item.get("is_discovered", False),
                             )
                             log.info(
-                                f"Evidence insertion result: ok={ok}, result={result}"
+                                f"Evidence insertion result: ok={ok}, result={result}, type={type(result)}"
                             )
                             if ok:
                                 evidence_count += 1
+                                log.info(f"Evidence count now: {evidence_count}")
+                        else:
+                            log.error("DB insert_evidence function is None!")
+                    except ImportError as e:
+                        log.error(f"Import error for db module: {e}")
                     except Exception as e:
                         log.error(f"Failed to insert evidence {i + 1}: {e}")
+                        log.error(f"Exception type: {type(e)}")
+                        import traceback
+                        log.error(f"Traceback: {traceback.format_exc()}")
 
             # Insert clues
             if game_data.get("clues"):
