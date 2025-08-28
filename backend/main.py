@@ -1116,7 +1116,7 @@ async def test_database_insertion():
         clue_ok, clue_result = _add_clue(
             "test_room_123",
             "The knife has fingerprints matching the butler",
-            "forensic",
+            "IMPORTANT",
             "Crime Lab",
         )
         log.info(f"Clue insertion result: ok={clue_ok}, result={clue_result}")
@@ -1315,6 +1315,7 @@ CRITICAL INSTRUCTIONS:
                     try:
                         log.info(f"Loading db module for evidence insertion...")
                         from db import insert_evidence as _insert_evidence
+
                         log.info(f"DB function loaded: {_insert_evidence is not None}")
 
                         log.info(
@@ -1344,6 +1345,7 @@ CRITICAL INSTRUCTIONS:
                         log.error(f"Failed to insert evidence {i + 1}: {e}")
                         log.error(f"Exception type: {type(e)}")
                         import traceback
+
                         log.error(f"Traceback: {traceback.format_exc()}")
 
             # Insert clues
@@ -1355,12 +1357,19 @@ CRITICAL INSTRUCTIONS:
                         # Map AI clue types to database constraint types
                         clue_type = item.get("type", "general")
                         if clue_type not in ["IMPORTANT", "CONTRADICTION"]:
-                            if "contradict" in clue_type.lower() or "conflict" in clue_type.lower():
+                            if (
+                                "contradict" in clue_type.lower()
+                                or "conflict" in clue_type.lower()
+                            ):
                                 clue_type = "CONTRADICTION"
                             else:
-                                clue_type = "IMPORTANT"  # Default to IMPORTANT for most clues
+                                clue_type = (
+                                    "IMPORTANT"  # Default to IMPORTANT for most clues
+                                )
 
-                        log.info(f"Inserting clue: {item.get('text', '')[:50]}... (type: {clue_type})")
+                        log.info(
+                            f"Inserting clue: {item.get('text', '')[:50]}... (type: {clue_type})"
+                        )
 
                         if _add_clue:
                             ok, _ = _add_clue(
