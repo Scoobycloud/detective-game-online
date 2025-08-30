@@ -1213,15 +1213,23 @@ async def create_structured_game(code: str, request: Request):
         # Process Evidence Items (pipe-delimited format)
         if evidence_text:
             log.info(f"Processing evidence text: {len(evidence_text)} chars")
-            evidence_lines = [line.strip() for line in evidence_text.split('\n') if line.strip()]
-            
+            evidence_lines = [
+                line.strip() for line in evidence_text.split("\n") if line.strip()
+            ]
+
             for i, line in enumerate(evidence_lines):
                 try:
-                    parts = [p.strip() for p in line.split('|')]
+                    parts = [p.strip() for p in line.split("|")]
                     if len(parts) >= 4:
-                        title, ev_type, location, notes = parts[0], parts[1], parts[2], parts[3]
-                        
+                        title, ev_type, location, notes = (
+                            parts[0],
+                            parts[1],
+                            parts[2],
+                            parts[3],
+                        )
+
                         from db import insert_evidence as _insert_evidence
+
                         if _insert_evidence:
                             ok, result = _insert_evidence(
                                 code,
@@ -1229,92 +1237,151 @@ async def create_structured_game(code: str, request: Request):
                                 ev_type=ev_type,
                                 location=location,
                                 notes=notes,
-                                is_discovered=False
+                                is_discovered=False,
                             )
                             if ok:
                                 evidence_count += 1
                                 log.info(f"Inserted evidence: {title}")
+                    else:
+                        log.warning(f"Evidence line {i + 1} has insufficient parts ({len(parts)}): {line}")
                 except Exception as e:
-                    log.error(f"Failed to parse evidence line {i+1}: {line} - {e}")
+                    log.error(f"Failed to parse evidence line {i + 1}: {line} - {e}")
+        else:
+            log.info("No evidence text provided - skipping evidence creation")
 
         # Process Clues (pipe-delimited format)
         if clues_text:
             log.info(f"Processing clues text: {len(clues_text)} chars")
-            clue_lines = [line.strip() for line in clues_text.split('\n') if line.strip()]
-            
+            clue_lines = [
+                line.strip() for line in clues_text.split("\n") if line.strip()
+            ]
+
             for i, line in enumerate(clue_lines):
                 try:
-                    parts = [p.strip() for p in line.split('|')]
+                    parts = [p.strip() for p in line.split("|")]
                     if len(parts) >= 3:
                         text, clue_type, source = parts[0], parts[1], parts[2]
-                        
+
                         # Validate clue type
                         if clue_type not in ["IMPORTANT", "CONTRADICTION"]:
                             clue_type = "IMPORTANT"  # Default to IMPORTANT
-                        
+
                         from db import add_clue as _add_clue
+
                         if _add_clue:
                             ok, result = _add_clue(code, text, clue_type, source)
                             if ok:
                                 clues_count += 1
                                 log.info(f"Inserted clue: {text[:50]}...")
+                    else:
+                        log.warning(f"Clue line {i + 1} has insufficient parts ({len(parts)}): {line}")
                 except Exception as e:
-                    log.error(f"Failed to parse clue line {i+1}: {line} - {e}")
+                    log.error(f"Failed to parse clue line {i + 1}: {line} - {e}")
+        else:
+            log.info("No clues text provided - skipping clues creation")
 
         # Process Timeline Events (pipe-delimited format)
         if timeline_text:
             log.info(f"Processing timeline text: {len(timeline_text)} chars")
-            timeline_lines = [line.strip() for line in timeline_text.split('\n') if line.strip()]
-            
+            timeline_lines = [
+                line.strip() for line in timeline_text.split("\n") if line.strip()
+            ]
+
             for i, line in enumerate(timeline_lines):
                 try:
-                    parts = [p.strip() for p in line.split('|')]
+                    parts = [p.strip() for p in line.split("|")]
                     if len(parts) >= 4:
-                        tstamp, phase, label, details = parts[0], parts[1], parts[2], parts[3]
-                        
+                        tstamp, phase, label, details = (
+                            parts[0],
+                            parts[1],
+                            parts[2],
+                            parts[3],
+                        )
+
                         from db import insert_timeline_event as _insert_timeline
+
                         if _insert_timeline:
-                            ok, result = _insert_timeline(code, tstamp, phase, label, details)
+                            ok, result = _insert_timeline(
+                                code, tstamp, phase, label, details
+                            )
                             if ok:
                                 timeline_count += 1
                                 log.info(f"Inserted timeline: {label}")
+                    else:
+                        log.warning(f"Timeline line {i + 1} has insufficient parts ({len(parts)}): {line}")
                 except Exception as e:
-                    log.error(f"Failed to parse timeline line {i+1}: {line} - {e}")
+                    log.error(f"Failed to parse timeline line {i + 1}: {line} - {e}")
+        else:
+            log.info("No timeline text provided - skipping timeline creation")
 
         # Process Alibis (pipe-delimited format)
         if alibis_text:
             log.info(f"Processing alibis text: {len(alibis_text)} chars")
-            alibi_lines = [line.strip() for line in alibis_text.split('\n') if line.strip()]
-            
+            alibi_lines = [
+                line.strip() for line in alibis_text.split("\n") if line.strip()
+            ]
+
             for i, line in enumerate(alibi_lines):
                 try:
-                    parts = [p.strip() for p in line.split('|')]
+                    parts = [p.strip() for p in line.split("|")]
                     if len(parts) >= 4:
-                        character, timeframe, account, credibility = parts[0], parts[1], parts[2], parts[3]
-                        
+                        character, timeframe, account, credibility = (
+                            parts[0],
+                            parts[1],
+                            parts[2],
+                            parts[3],
+                        )
+
                         # Convert credibility to int
                         try:
                             credibility_score = int(credibility)
                         except ValueError:
                             credibility_score = 75  # Default credibility
-                        
+
                         from db import insert_alibi as _insert_alibi
+
                         if _insert_alibi:
-                            ok, result = _insert_alibi(code, character, timeframe, account, credibility_score)
+                            ok, result = _insert_alibi(
+                                code, character, timeframe, account, credibility_score
+                            )
                             if ok:
                                 alibis_count += 1
                                 log.info(f"Inserted alibi for: {character}")
+                    else:
+                        log.warning(f"Alibi line {i + 1} has insufficient parts ({len(parts)}): {line}")
                 except Exception as e:
-                    log.error(f"Failed to parse alibi line {i+1}: {line} - {e}")
+                    log.error(f"Failed to parse alibi line {i + 1}: {line} - {e}")
+        else:
+            log.info("No alibis text provided - skipping alibis creation")
 
         # Emit socket events to notify clients
         await sio.emit("evidence_updated", {}, room=code)
         await sio.emit("timeline_updated", {}, room=code)
         await sio.emit("alibis_updated", {}, room=code)
 
+        # Create summary of what was processed
+        sections_processed = []
+        if evidence_text: sections_processed.append(f"{evidence_count} evidence items")
+        if clues_text: sections_processed.append(f"{clues_count} clues")
+        if timeline_text: sections_processed.append(f"{timeline_count} timeline events")
+        if alibis_text: sections_processed.append(f"{alibis_count} alibis")
+
+        sections_skipped = []
+        if not evidence_text: sections_skipped.append("evidence")
+        if not clues_text: sections_skipped.append("clues")
+        if not timeline_text: sections_skipped.append("timeline")
+        if not alibis_text: sections_skipped.append("alibis")
+
         log.info(
             f"Game creation completed. Final counts - Evidence: {evidence_count}, Clues: {clues_count}, Timeline: {timeline_count}, Alibis: {alibis_count}"
         )
+        
+        if sections_skipped:
+            log.info(f"Sections skipped (empty): {', '.join(sections_skipped)}")
+
+        summary_message = f"Game created with {', '.join(sections_processed) if sections_processed else 'narrative only'}"
+        if sections_skipped:
+            summary_message += f". Skipped: {', '.join(sections_skipped)}"
 
         return {
             "success": True,
@@ -1322,7 +1389,9 @@ async def create_structured_game(code: str, request: Request):
             "clues_count": clues_count,
             "timeline_count": timeline_count,
             "alibis_count": alibis_count,
-            "message": f"Game created successfully with {evidence_count} evidence items, {clues_count} clues, {timeline_count} timeline events, and {alibis_count} alibis",
+            "sections_processed": sections_processed,
+            "sections_skipped": sections_skipped,
+            "message": summary_message,
         }
 
     except HTTPException:
@@ -1336,7 +1405,9 @@ async def create_structured_game(code: str, request: Request):
 @app.post("/rooms/{code}/generate-game")
 async def generate_game_ai(code: str, request: Request):
     """Generate a complete murder mystery game from a narrative using AI."""
-    return {"error": "AI generation temporarily disabled. Use structured input instead."}
+    return {
+        "error": "AI generation temporarily disabled. Use structured input instead."
+    }
 
 
 # ci: trigger render deploy - force redeployment
