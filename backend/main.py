@@ -1144,15 +1144,19 @@ async def test_database_insertion():
         }
 
 
-@app.post("/rooms/{code}/generate-game")
-async def generate_game(code: str, request: Request):
-    """Generate a complete murder mystery game from a narrative."""
+@app.post("/rooms/{code}/create-structured-game")
+async def create_structured_game(code: str, request: Request):
+    """Create a complete murder mystery game from structured input data."""
     try:
         data = await request.json()
         narrative = data.get("narrative", "").strip()
+        clues_text = data.get("clues", "").strip()
+        evidence_text = data.get("evidence", "").strip()
+        timeline_text = data.get("timeline", "").strip()
+        alibis_text = data.get("alibis", "").strip()
 
         if not narrative:
-            raise HTTPException(status_code=400, detail="Narrative text is required")
+            raise HTTPException(status_code=400, detail="Narrative story is required")
 
         if len(narrative) < 50:
             raise HTTPException(
@@ -1198,261 +1202,141 @@ async def generate_game(code: str, request: Request):
             log.error(f"Room validation/creation error: {e}")
             raise HTTPException(status_code=500, detail="Database error")
 
-        # Import OpenAI for narrative processing
-        try:
-            import openai
+        # Process structured input data directly (no AI needed)
+        log.info(f"Processing structured game data for room {code}")
 
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise HTTPException(
-                    status_code=500, detail="OpenAI API key not configured on server"
-                )
+        evidence_count = 0
+        clues_count = 0
+        timeline_count = 0
+        alibis_count = 0
 
-            openai.api_key = openai_api_key
-            log.info("OpenAI API key configured successfully")
-
-            # Create the AI prompt for narrative processing
-            prompt = f"""You are an expert murder mystery game designer. Analyze this narrative and generate comprehensive game content for a detective game.
-
-NARRATIVE: {narrative}
-
-Please respond with a JSON object containing exactly these keys:
-- characters: Array of character objects with name, role (victim/suspect/witness/housekeeper), and detailed backstory
-- evidence: Array of evidence objects with title, type (item/document/video/witness_statement), location, detailed notes, and is_discovered (set to false for discovery gameplay)
-- timeline_events: Array of timeline objects with tstamp (use format like "8:45 PM" or "2:00 PM"), phase (pre_crime/during_crime/post_discovery), label, and details
-- clues: Array of clue objects with text, type (IMPORTANT/CONTRADICTION), and source (who found it or who provided the info)
-- alibis: Array of alibi objects with character, timeframe, account (detailed description), and credibility_score (0-100, lower for suspicious alibis)
-
-CRITICAL INSTRUCTIONS:
-- For clues: Use IMPORTANT for key facts, CONTRADICTION for conflicting statements
-- Set ALL evidence is_discovered to false for proper gameplay
-- Include the housekeeper as a witness character
-- Make alibis detailed and some suspiciously weak
-- Create clues that can be discovered through location searches
-- Ensure timeline creates clear interrogation opportunities
-- Add red herrings and false leads for engaging gameplay
-- Generate 3-5 evidence items, 4-6 clues, 5-8 timeline events, and alibis for each suspect"""
-
-            # Call OpenAI API using synchronous client (for older library versions)
-            log.info(f"Sending narrative to OpenAI (length: {len(narrative)} chars)")
-            openai.api_key = openai_api_key
-
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-                max_tokens=2000,
-            )
-
-            ai_response = response.choices[0].message.content.strip()
-            log.info(f"Received AI response (length: {len(ai_response)} chars)")
-            log.info(f"AI response preview: {ai_response[:200]}...")
-
-            # Parse the JSON response
-            log.info(f"Attempting to parse AI response as JSON")
-
-            # Sometimes AI includes extra text before/after JSON - try to extract JSON
-            import re
-
-            json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
-            if json_match:
-                ai_response = json_match.group()
-                log.info(f"Extracted JSON content from AI response")
-            else:
-                log.info(f"No JSON found in AI response, using as-is")
-            try:
-                game_data = json.loads(ai_response)
-                log.info(
-                    f"Successfully parsed JSON with keys: {list(game_data.keys())}"
-                )
-            except json.JSONDecodeError as e:
-                log.error(f"Failed to parse AI response: {e}")
-                raise HTTPException(
-                    status_code=500, detail="Failed to parse AI response"
-                )
-
-            # Validate the response structure
-            required_keys = [
-                "characters",
-                "evidence",
-                "timeline_events",
-                "clues",
-                "alibis",
-            ]
-            if not all(key in game_data for key in required_keys):
-                log.error(
-                    f"AI response missing required keys. Has: {list(game_data.keys())}, Needs: {required_keys}"
-                )
-                log.error(f"AI response content: {str(game_data)[:500]}...")
-                raise HTTPException(
-                    status_code=500, detail="AI response missing required game elements"
-                )
-
-            log.info(
-                f"AI response validation passed. Evidence: {len(game_data.get('evidence', []))}, Clues: {len(game_data.get('clues', []))}"
-            )
-
-            evidence_count = 0
-            clues_count = 0
-
-            # Log the actual data we're trying to insert
-            log.info(
-                f"Evidence data: {game_data.get('evidence', [])[:2]}..."
-            )  # First 2 items
-            log.info(
-                f"Clues data: {game_data.get('clues', [])[:2]}..."
-            )  # First 2 items
-
-            # Insert characters (this would require a characters table)
-            # For now, we'll focus on evidence, clues, timeline, and alibis
-
-            # Insert evidence
-            log.info(
-                f"Starting evidence insertion. Items: {len(game_data.get('evidence', []))}"
-            )
-            if game_data.get("evidence"):
-                for i, item in enumerate(game_data["evidence"]):
-                    try:
-                        log.info(f"Loading db module for evidence insertion...")
+        # Process Evidence Items (pipe-delimited format)
+        if evidence_text:
+            log.info(f"Processing evidence text: {len(evidence_text)} chars")
+            evidence_lines = [line.strip() for line in evidence_text.split('\n') if line.strip()]
+            
+            for i, line in enumerate(evidence_lines):
+                try:
+                    parts = [p.strip() for p in line.split('|')]
+                    if len(parts) >= 4:
+                        title, ev_type, location, notes = parts[0], parts[1], parts[2], parts[3]
+                        
                         from db import insert_evidence as _insert_evidence
-
-                        log.info(f"DB function loaded: {_insert_evidence is not None}")
-
-                        log.info(
-                            f"Inserting evidence {i + 1}: {item.get('title', 'Unknown')} into room {code}"
-                        )
-
                         if _insert_evidence:
                             ok, result = _insert_evidence(
                                 code,
-                                title=item.get("title", "Unknown Evidence"),
-                                ev_type=item.get("type", "item"),
-                                location=item.get("location", "Unknown"),
-                                notes=item.get("notes", ""),
-                                is_discovered=item.get("is_discovered", False),
-                            )
-                            log.info(
-                                f"Evidence insertion result: ok={ok}, result={result}, type={type(result)}"
+                                title=title,
+                                ev_type=ev_type,
+                                location=location,
+                                notes=notes,
+                                is_discovered=False
                             )
                             if ok:
                                 evidence_count += 1
-                                log.info(f"Evidence count now: {evidence_count}")
-                        else:
-                            log.error("DB insert_evidence function is None!")
-                    except ImportError as e:
-                        log.error(f"Import error for db module: {e}")
-                    except Exception as e:
-                        log.error(f"Failed to insert evidence {i + 1}: {e}")
-                        log.error(f"Exception type: {type(e)}")
-                        import traceback
+                                log.info(f"Inserted evidence: {title}")
+                except Exception as e:
+                    log.error(f"Failed to parse evidence line {i+1}: {line} - {e}")
 
-                        log.error(f"Traceback: {traceback.format_exc()}")
-
-            # Insert clues
-            if game_data.get("clues"):
-                for item in game_data["clues"]:
-                    try:
-                        from db import add_clue as _add_clue
-
-                        # Map AI clue types to database constraint types
-                        clue_type = item.get("type", "general")
+        # Process Clues (pipe-delimited format)
+        if clues_text:
+            log.info(f"Processing clues text: {len(clues_text)} chars")
+            clue_lines = [line.strip() for line in clues_text.split('\n') if line.strip()]
+            
+            for i, line in enumerate(clue_lines):
+                try:
+                    parts = [p.strip() for p in line.split('|')]
+                    if len(parts) >= 3:
+                        text, clue_type, source = parts[0], parts[1], parts[2]
+                        
+                        # Validate clue type
                         if clue_type not in ["IMPORTANT", "CONTRADICTION"]:
-                            if (
-                                "contradict" in clue_type.lower()
-                                or "conflict" in clue_type.lower()
-                            ):
-                                clue_type = "CONTRADICTION"
-                            else:
-                                clue_type = (
-                                    "IMPORTANT"  # Default to IMPORTANT for most clues
-                                )
-
-                        log.info(
-                            f"Inserting clue: {item.get('text', '')[:50]}... (type: {clue_type})"
-                        )
-
+                            clue_type = "IMPORTANT"  # Default to IMPORTANT
+                        
+                        from db import add_clue as _add_clue
                         if _add_clue:
-                            ok, _ = _add_clue(
-                                code,
-                                item.get("text", ""),
-                                clue_type,
-                                item.get("source", "unknown"),
-                            )
-                            log.info(f"Clue insertion result: ok={ok}")
+                            ok, result = _add_clue(code, text, clue_type, source)
                             if ok:
                                 clues_count += 1
-                    except Exception as e:
-                        log.error(f"Failed to insert clue: {e}")
+                                log.info(f"Inserted clue: {text[:50]}...")
+                except Exception as e:
+                    log.error(f"Failed to parse clue line {i+1}: {line} - {e}")
 
-            # Insert timeline events
-            if game_data.get("timeline_events"):
-                for item in game_data["timeline_events"]:
-                    try:
+        # Process Timeline Events (pipe-delimited format)
+        if timeline_text:
+            log.info(f"Processing timeline text: {len(timeline_text)} chars")
+            timeline_lines = [line.strip() for line in timeline_text.split('\n') if line.strip()]
+            
+            for i, line in enumerate(timeline_lines):
+                try:
+                    parts = [p.strip() for p in line.split('|')]
+                    if len(parts) >= 4:
+                        tstamp, phase, label, details = parts[0], parts[1], parts[2], parts[3]
+                        
                         from db import insert_timeline_event as _insert_timeline
-
                         if _insert_timeline:
-                            ok, _ = _insert_timeline(
-                                code,
-                                tstamp=item.get("tstamp", "Unknown time"),
-                                phase=item.get("phase", "investigation"),
-                                label=item.get("label", "Event"),
-                                details=item.get("details", ""),
-                            )
-                    except Exception as e:
-                        log.error(f"Failed to insert timeline event: {e}")
+                            ok, result = _insert_timeline(code, tstamp, phase, label, details)
+                            if ok:
+                                timeline_count += 1
+                                log.info(f"Inserted timeline: {label}")
+                except Exception as e:
+                    log.error(f"Failed to parse timeline line {i+1}: {line} - {e}")
 
-            # Insert alibis
-            if game_data.get("alibis"):
-                for item in game_data["alibis"]:
-                    try:
+        # Process Alibis (pipe-delimited format)
+        if alibis_text:
+            log.info(f"Processing alibis text: {len(alibis_text)} chars")
+            alibi_lines = [line.strip() for line in alibis_text.split('\n') if line.strip()]
+            
+            for i, line in enumerate(alibi_lines):
+                try:
+                    parts = [p.strip() for p in line.split('|')]
+                    if len(parts) >= 4:
+                        character, timeframe, account, credibility = parts[0], parts[1], parts[2], parts[3]
+                        
+                        # Convert credibility to int
+                        try:
+                            credibility_score = int(credibility)
+                        except ValueError:
+                            credibility_score = 75  # Default credibility
+                        
                         from db import insert_alibi as _insert_alibi
-
                         if _insert_alibi:
-                            ok, _ = _insert_alibi(
-                                code,
-                                character=item.get("character", "Unknown"),
-                                timeframe=item.get("timeframe", "Unknown"),
-                                account=item.get("account", ""),
-                                credibility_score=75,  # Default credibility
-                            )
-                    except Exception as e:
-                        log.error(f"Failed to insert alibi: {e}")
+                            ok, result = _insert_alibi(code, character, timeframe, account, credibility_score)
+                            if ok:
+                                alibis_count += 1
+                                log.info(f"Inserted alibi for: {character}")
+                except Exception as e:
+                    log.error(f"Failed to parse alibi line {i+1}: {line} - {e}")
 
-            # Emit socket events to notify clients
-            await sio.emit("evidence_updated", {}, room=code)
-            await sio.emit("timeline_updated", {}, room=code)
-            await sio.emit("alibis_updated", {}, room=code)
+        # Emit socket events to notify clients
+        await sio.emit("evidence_updated", {}, room=code)
+        await sio.emit("timeline_updated", {}, room=code)
+        await sio.emit("alibis_updated", {}, room=code)
 
-            log.info(
-                f"Game generation completed. Final counts - Evidence: {evidence_count}, Clues: {clues_count}"
-            )
+        log.info(
+            f"Game creation completed. Final counts - Evidence: {evidence_count}, Clues: {clues_count}, Timeline: {timeline_count}, Alibis: {alibis_count}"
+        )
 
-            return {
-                "success": True,
-                "evidence_count": evidence_count,
-                "clues_count": clues_count,
-                "message": f"Game generated successfully with {evidence_count} evidence items and {clues_count} clues",
-            }
-
-        except ImportError:
-            raise HTTPException(status_code=500, detail="OpenAI library not available")
-        except openai.OpenAIError as e:
-            log.error(f"OpenAI API error: {e}")
-            raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
-        except json.JSONDecodeError as e:
-            log.error(f"AI response parsing error: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Failed to parse AI response: {str(e)}"
-            )
-        except Exception as e:
-            log.error(f"AI processing error: {e}")
-            raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
+        return {
+            "success": True,
+            "evidence_count": evidence_count,
+            "clues_count": clues_count,
+            "timeline_count": timeline_count,
+            "alibis_count": alibis_count,
+            "message": f"Game created successfully with {evidence_count} evidence items, {clues_count} clues, {timeline_count} timeline events, and {alibis_count} alibis",
+        }
 
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Unexpected error in generate_game: {e}")
+        log.error(f"Unexpected error in create_structured_game: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# Keep the old AI-based endpoint for backward compatibility
+@app.post("/rooms/{code}/generate-game")
+async def generate_game_ai(code: str, request: Request):
+    """Generate a complete murder mystery game from a narrative using AI."""
+    return {"error": "AI generation temporarily disabled. Use structured input instead."}
 
 
 # ci: trigger render deploy - force redeployment
