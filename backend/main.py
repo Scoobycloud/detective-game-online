@@ -1205,6 +1205,111 @@ async def create_structured_game(code: str, request: Request):
         # Process structured input data directly (no AI needed)
         log.info(f"Processing structured game data for room {code}")
 
+        # Persist the narrative/story into cases.summary for this room
+        try:
+            summary_payload = {"narrative": narrative}
+            ok_case, err = db_upsert_case(
+                code, status="open", seed=code, summary=summary_payload
+            )
+            if not ok_case:
+                log.error(f"Failed to upsert case narrative for {code}: {err}")
+            else:
+                log.info(f"Narrative stored in cases.summary for room {code}")
+        except Exception as e:
+            log.error(f"Error storing narrative for room {code}: {e}")
+
+        # --- Smart merge preload: gather existing items to avoid duplicates ---
+        evidence_duplicates = 0
+        clues_duplicates = 0
+        timeline_duplicates = 0
+        alibis_duplicates = 0
+
+        existing_evidence_keys = set()
+        existing_clue_keys = set()
+        existing_timeline_keys = set()
+        existing_alibi_keys = set()
+
+        def _norm(value):
+            return (value or "").strip().lower()
+
+        try:
+            from db import (
+                get_evidence_for_room as _get_evidence_all,
+                get_clues_for_room as _get_clues_all,
+                get_timeline_for_room as _get_timeline_all,
+                get_alibis_for_room as _get_alibis_all,
+            )
+
+            # Existing evidence
+            try:
+                ok_ev, ev_items = _get_evidence_all(code)
+                if ok_ev and ev_items:
+                    for r in ev_items:
+                        existing_evidence_keys.add(
+                            (
+                                _norm(r.get("title")),
+                                _norm(r.get("type")),
+                                _norm(r.get("location")),
+                            )
+                        )
+            except Exception as e:
+                log.error(
+                    f"Smart merge: failed to load existing evidence for {code}: {e}"
+                )
+
+            # Existing clues
+            try:
+                ok_cl, cl_items = _get_clues_all(code)
+                if ok_cl and cl_items:
+                    for r in cl_items:
+                        existing_clue_keys.add(
+                            (
+                                _norm(r.get("text")),
+                                _norm(r.get("type")),
+                                _norm(r.get("source")),
+                            )
+                        )
+            except Exception as e:
+                log.error(f"Smart merge: failed to load existing clues for {code}: {e}")
+
+            # Existing timeline
+            try:
+                ok_tl, tl_items = _get_timeline_all(code)
+                if ok_tl and tl_items:
+                    for r in tl_items:
+                        existing_timeline_keys.add(
+                            (
+                                _norm(r.get("tstamp")),
+                                _norm(r.get("phase")),
+                                _norm(r.get("label")),
+                                _norm(r.get("details")),
+                            )
+                        )
+            except Exception as e:
+                log.error(
+                    f"Smart merge: failed to load existing timeline for {code}: {e}"
+                )
+
+            # Existing alibis
+            try:
+                ok_al, al_items = _get_alibis_all(code)
+                if ok_al and al_items:
+                    for r in al_items:
+                        existing_alibi_keys.add(
+                            (
+                                _norm(r.get("character")),
+                                _norm(r.get("timeframe")),
+                                _norm(r.get("account")),
+                            )
+                        )
+            except Exception as e:
+                log.error(
+                    f"Smart merge: failed to load existing alibis for {code}: {e}"
+                )
+
+        except Exception as e:
+            log.error(f"Smart merge preload failed: {e}")
+
         evidence_count = 0
         clues_count = 0
         timeline_count = 0
@@ -1228,6 +1333,13 @@ async def create_structured_game(code: str, request: Request):
                             parts[3],
                         )
 
+                        # Smart merge: skip duplicates
+                        ev_key = (_norm(title), _norm(ev_type), _norm(location))
+                        if ev_key in existing_evidence_keys:
+                            evidence_duplicates += 1
+                            log.info(f"Skipped duplicate evidence: {title}")
+                            continue
+
                         from db import insert_evidence as _insert_evidence
 
                         if _insert_evidence:
@@ -1242,8 +1354,11 @@ async def create_structured_game(code: str, request: Request):
                             if ok:
                                 evidence_count += 1
                                 log.info(f"Inserted evidence: {title}")
+                                existing_evidence_keys.add(ev_key)
                     else:
-                        log.warning(f"Evidence line {i + 1} has insufficient parts ({len(parts)}): {line}")
+                        log.warning(
+                            f"Evidence line {i + 1} has insufficient parts ({len(parts)}): {line}"
+                        )
                 except Exception as e:
                     log.error(f"Failed to parse evidence line {i + 1}: {line} - {e}")
         else:
@@ -1266,6 +1381,13 @@ async def create_structured_game(code: str, request: Request):
                         if clue_type not in ["IMPORTANT", "CONTRADICTION"]:
                             clue_type = "IMPORTANT"  # Default to IMPORTANT
 
+                        # Smart merge: skip duplicates
+                        clue_key = (_norm(text), _norm(clue_type), _norm(source))
+                        if clue_key in existing_clue_keys:
+                            clues_duplicates += 1
+                            log.info(f"Skipped duplicate clue: {text[:50]}...")
+                            continue
+
                         from db import add_clue as _add_clue
 
                         if _add_clue:
@@ -1273,8 +1395,11 @@ async def create_structured_game(code: str, request: Request):
                             if ok:
                                 clues_count += 1
                                 log.info(f"Inserted clue: {text[:50]}...")
+                                existing_clue_keys.add(clue_key)
                     else:
-                        log.warning(f"Clue line {i + 1} has insufficient parts ({len(parts)}): {line}")
+                        log.warning(
+                            f"Clue line {i + 1} has insufficient parts ({len(parts)}): {line}"
+                        )
                 except Exception as e:
                     log.error(f"Failed to parse clue line {i + 1}: {line} - {e}")
         else:
@@ -1298,6 +1423,18 @@ async def create_structured_game(code: str, request: Request):
                             parts[3],
                         )
 
+                        # Smart merge: skip duplicates
+                        tl_key = (
+                            _norm(tstamp),
+                            _norm(phase),
+                            _norm(label),
+                            _norm(details),
+                        )
+                        if tl_key in existing_timeline_keys:
+                            timeline_duplicates += 1
+                            log.info(f"Skipped duplicate timeline: {label}")
+                            continue
+
                         from db import insert_timeline_event as _insert_timeline
 
                         if _insert_timeline:
@@ -1307,8 +1444,11 @@ async def create_structured_game(code: str, request: Request):
                             if ok:
                                 timeline_count += 1
                                 log.info(f"Inserted timeline: {label}")
+                                existing_timeline_keys.add(tl_key)
                     else:
-                        log.warning(f"Timeline line {i + 1} has insufficient parts ({len(parts)}): {line}")
+                        log.warning(
+                            f"Timeline line {i + 1} has insufficient parts ({len(parts)}): {line}"
+                        )
                 except Exception as e:
                     log.error(f"Failed to parse timeline line {i + 1}: {line} - {e}")
         else:
@@ -1338,6 +1478,17 @@ async def create_structured_game(code: str, request: Request):
                         except ValueError:
                             credibility_score = 75  # Default credibility
 
+                        # Smart merge: skip duplicates
+                        al_key = (
+                            _norm(character),
+                            _norm(timeframe),
+                            _norm(account),
+                        )
+                        if al_key in existing_alibi_keys:
+                            alibis_duplicates += 1
+                            log.info(f"Skipped duplicate alibi for: {character}")
+                            continue
+
                         from db import insert_alibi as _insert_alibi
 
                         if _insert_alibi:
@@ -1347,8 +1498,11 @@ async def create_structured_game(code: str, request: Request):
                             if ok:
                                 alibis_count += 1
                                 log.info(f"Inserted alibi for: {character}")
+                                existing_alibi_keys.add(al_key)
                     else:
-                        log.warning(f"Alibi line {i + 1} has insufficient parts ({len(parts)}): {line}")
+                        log.warning(
+                            f"Alibi line {i + 1} has insufficient parts ({len(parts)}): {line}"
+                        )
                 except Exception as e:
                     log.error(f"Failed to parse alibi line {i + 1}: {line} - {e}")
         else:
@@ -1361,21 +1515,29 @@ async def create_structured_game(code: str, request: Request):
 
         # Create summary of what was processed
         sections_processed = []
-        if evidence_text: sections_processed.append(f"{evidence_count} evidence items")
-        if clues_text: sections_processed.append(f"{clues_count} clues")
-        if timeline_text: sections_processed.append(f"{timeline_count} timeline events")
-        if alibis_text: sections_processed.append(f"{alibis_count} alibis")
+        if evidence_text:
+            sections_processed.append(f"{evidence_count} evidence items")
+        if clues_text:
+            sections_processed.append(f"{clues_count} clues")
+        if timeline_text:
+            sections_processed.append(f"{timeline_count} timeline events")
+        if alibis_text:
+            sections_processed.append(f"{alibis_count} alibis")
 
         sections_skipped = []
-        if not evidence_text: sections_skipped.append("evidence")
-        if not clues_text: sections_skipped.append("clues")
-        if not timeline_text: sections_skipped.append("timeline")
-        if not alibis_text: sections_skipped.append("alibis")
+        if not evidence_text:
+            sections_skipped.append("evidence")
+        if not clues_text:
+            sections_skipped.append("clues")
+        if not timeline_text:
+            sections_skipped.append("timeline")
+        if not alibis_text:
+            sections_skipped.append("alibis")
 
         log.info(
             f"Game creation completed. Final counts - Evidence: {evidence_count}, Clues: {clues_count}, Timeline: {timeline_count}, Alibis: {alibis_count}"
         )
-        
+
         if sections_skipped:
             log.info(f"Sections skipped (empty): {', '.join(sections_skipped)}")
 
@@ -1390,6 +1552,12 @@ async def create_structured_game(code: str, request: Request):
             "timeline_count": timeline_count,
             "alibis_count": alibis_count,
             "sections_processed": sections_processed,
+            "duplicates_skipped": {
+                "evidence": evidence_duplicates,
+                "clues": clues_duplicates,
+                "timeline": timeline_duplicates,
+                "alibis": alibis_duplicates,
+            },
             "sections_skipped": sections_skipped,
             "message": summary_message,
         }
