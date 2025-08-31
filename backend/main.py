@@ -60,6 +60,8 @@ try:
         insert_relationship as db_insert_relationship,
         insert_alibi as db_insert_alibi,
         get_case_framework as db_get_case_framework,
+        get_case_character as db_get_case_character,
+        get_case_characters_min as db_get_case_characters_min,
     )
 except Exception:
     from db import (
@@ -76,6 +78,8 @@ except Exception:
         insert_relationship as db_insert_relationship,
         insert_alibi as db_insert_alibi,
         get_case_framework as db_get_case_framework,
+        get_case_character as db_get_case_character,
+        get_case_characters_min as db_get_case_characters_min,
     )
 
     try:
@@ -102,6 +106,36 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ===== Read APIs: Case and Characters =====
+@app.get("/rooms/{code}/case")
+async def get_room_case(code: str):
+    try:
+        ok, framework = db_get_case_framework(code)
+        if not ok:
+            raise HTTPException(status_code=500, detail="Database error")
+        # framework may be None if no case yet
+        return {"success": True, "case": framework.get("case") if framework else None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"GET /rooms/{code}/case failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch case")
+
+
+@app.get("/rooms/{code}/characters")
+async def get_room_characters(code: str):
+    try:
+        # Use minimal set with personality; falls back to empty list
+        ok, rows = db_get_case_characters_min(code)
+        if not ok:
+            raise HTTPException(status_code=500, detail="Database error")
+        return {"success": True, "characters": rows or []}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"GET /rooms/{code}/characters failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch characters")
 
 """
 Room model (in-memory, persisted optionally to DB later):
