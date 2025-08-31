@@ -617,8 +617,76 @@ def mark_evidence_discovered(
 
 
 def get_credibility_counts(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
-    """Return a list of {character, contradictions} by scanning contradiction evidence notes."""
+    """Return list of credibility signals per character.
+
+    Shape per item:
+      {
+        "character": str,
+        "contradictions": int,              # number of CONTRADICTION clues linked to this character
+        "avg_credibility": float | None     # average of alibis.credibility_score for this character
+      }
+    """
     if not supabase:
+        return False, []
+    try:
+        # Gather alibi credibility averages per character
+        alibi_res = (
+            supabase.table("alibis")
+            .select("character, credibility_score")
+            .eq("room_code", room_code)
+            .execute()
+        )
+        alibi_rows: List[Dict[str, Any]] = getattr(alibi_res, "data", []) or []
+        cred_sum: Dict[str, float] = {}
+        cred_count: Dict[str, int] = {}
+        for r in alibi_rows:
+            ch = (r.get("character") or "").strip()
+            if not ch:
+                continue
+            cs = r.get("credibility_score")
+            try:
+                val = float(cs) if cs is not None else None
+            except Exception:
+                val = None
+            if val is None:
+                continue
+            cred_sum[ch] = cred_sum.get(ch, 0.0) + val
+            cred_count[ch] = cred_count.get(ch, 0) + 1
+
+        # Gather contradictions per character via clues when linked
+        clues_res = (
+            supabase.table("clues")
+            .select("character_name, type")
+            .eq("room_code", room_code)
+            .execute()
+        )
+        clues_rows: List[Dict[str, Any]] = getattr(clues_res, "data", []) or []
+        contrad: Dict[str, int] = {}
+        for r in clues_rows:
+            if (r.get("type") or "").upper() != "CONTRADICTION":
+                continue
+            ch = (r.get("character_name") or "").strip()
+            if not ch:
+                continue
+            contrad[ch] = contrad.get(ch, 0) + 1
+
+        # Union of characters seen in either alibis or contradictions
+        all_chars = set(cred_sum.keys()) | set(contrad.keys())
+        items: List[Dict[str, Any]] = []
+        for ch in sorted(all_chars):
+            avg: Optional[float] = None
+            if cred_count.get(ch):
+                avg = cred_sum[ch] / float(cred_count[ch])
+            items.append(
+                {
+                    "character": ch,
+                    "contradictions": int(contrad.get(ch, 0)),
+                    "avg_credibility": avg,
+                }
+            )
+        return True, items
+    except Exception as e:
+        print("DB get_credibility_counts warning:", e)
         return False, []
 
 
