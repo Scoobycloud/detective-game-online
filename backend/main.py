@@ -107,6 +107,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ===== Read APIs: Case and Characters =====
 @app.get("/rooms/{code}/case")
 async def get_room_case(code: str):
@@ -136,6 +137,7 @@ async def get_room_characters(code: str):
     except Exception as e:
         log.error(f"GET /rooms/{code}/characters failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch characters")
+
 
 """
 Room model (in-memory, persisted optionally to DB later):
@@ -1239,16 +1241,29 @@ async def create_structured_game(code: str, request: Request):
         # Process structured input data directly (no AI needed)
         log.info(f"Processing structured game data for room {code}")
 
-        # Persist the narrative/story into cases.summary for this room
+        # Persist the narrative/story into cases.summary for this room (preserve existing fields)
         try:
-            summary_payload = {"narrative": narrative}
+            # Load current case to merge summaries
+            cur_ok, framework = db_get_case_framework(code)
+            existing_summary = {}
+            if cur_ok and framework and isinstance(framework.get("case"), dict):
+                cur_case = framework.get("case") or {}
+                cur_summary = cur_case.get("summary")
+                if isinstance(cur_summary, dict):
+                    existing_summary = dict(cur_summary)
+
+            merged_summary = dict(existing_summary)
+            merged_summary["narrative"] = narrative
+
             ok_case, err = db_upsert_case(
-                code, status="open", seed=code, summary=summary_payload
+                code, status="open", seed=code, summary=merged_summary
             )
             if not ok_case:
                 log.error(f"Failed to upsert case narrative for {code}: {err}")
             else:
-                log.info(f"Narrative stored in cases.summary for room {code}")
+                log.info(
+                    f"Narrative stored/merged in cases.summary for room {code} (preserved keys: {list(existing_summary.keys())})"
+                )
         except Exception as e:
             log.error(f"Error storing narrative for room {code}: {e}")
 
