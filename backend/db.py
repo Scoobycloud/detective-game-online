@@ -224,6 +224,7 @@ def add_clue(
     clue_type: str,
     source: Optional[str] = None,
     timestamp: Optional[str] = None,
+    character_name: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """Insert a clue row if the table exists.
     Expected schema: clues(id uuid pk, room_code text, text text, type text, source text, timestamp text, created_at timestamp default now())
@@ -239,6 +240,8 @@ def add_clue(
         }
         if timestamp:
             payload["timestamp"] = timestamp
+        if character_name:
+            payload["character_name"] = character_name
         res = supabase.table("clues").insert(payload).execute()
         data = getattr(res, "data", None)
         return True, f"inserted:{len(data) if data is not None else 'unknown'}"
@@ -254,7 +257,7 @@ def get_clues_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
     try:
         res = (
             supabase.table("clues")
-            .select("text,type,source,timestamp,created_at")
+            .select("text,type,source,timestamp,created_at,character_name")
             .eq("room_code", room_code)
             .order("created_at", desc=False)
             .execute()
@@ -356,6 +359,7 @@ def insert_evidence(
     is_discovered: bool = False,
     thumbnail_url: Optional[str] = None,
     media_url: Optional[str] = None,
+    character_name: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     if not supabase:
         return False, "supabase_not_configured"
@@ -372,6 +376,8 @@ def insert_evidence(
             payload["thumbnail_url"] = thumbnail_url
         if media_url is not None:
             payload["media_url"] = media_url
+        if character_name is not None:
+            payload["character_name"] = character_name
         res = supabase.table("evidence").insert(payload).execute()
         return True, None
     except Exception as e:
@@ -514,7 +520,7 @@ def get_evidence_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
         res = (
             supabase.table("evidence")
             .select(
-                "id,title,type,location,is_discovered,discovered_at,notes,created_at,thumbnail_url,media_url"
+                "id,title,type,location,is_discovered,discovered_at,notes,created_at,thumbnail_url,media_url,character_name"
             )
             .eq("room_code", room_code)
             .order("created_at", desc=False)

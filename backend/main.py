@@ -1381,6 +1381,8 @@ async def create_structured_game(code: str, request: Request):
                             parts[2],
                             parts[3],
                         )
+                        # Optional 5th part: character_name link
+                        character_name = parts[4] if len(parts) >= 5 and parts[4] else None
 
                         # Smart merge: skip duplicates
                         ev_key = (_norm(title), _norm(ev_type), _norm(location))
@@ -1399,6 +1401,7 @@ async def create_structured_game(code: str, request: Request):
                                 location=location,
                                 notes=notes,
                                 is_discovered=False,
+                                character_name=character_name,
                             )
                             if ok:
                                 evidence_count += 1
@@ -1425,6 +1428,8 @@ async def create_structured_game(code: str, request: Request):
                     parts = [p.strip() for p in line.split("|")]
                     if len(parts) >= 3:
                         text, clue_type, source = parts[0], parts[1], parts[2]
+                        # Optional 4th part: character_name link
+                        character_name = parts[3] if len(parts) >= 4 and parts[3] else None
 
                         # Validate clue type
                         if clue_type not in ["IMPORTANT", "CONTRADICTION"]:
@@ -1440,7 +1445,7 @@ async def create_structured_game(code: str, request: Request):
                         from db import add_clue as _add_clue
 
                         if _add_clue:
-                            ok, result = _add_clue(code, text, clue_type, source)
+                            ok, result = _add_clue(code, text, clue_type, source, None, character_name)
                             if ok:
                                 clues_count += 1
                                 log.info(f"Inserted clue: {text[:50]}...")
