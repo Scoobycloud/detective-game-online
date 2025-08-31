@@ -58,14 +58,29 @@ async def answer_in_character(
     except Exception:
         ok, ch = (False, None)
     honesty = None
+    refused = False
     if ok and ch and isinstance(ch.get("knowledge_scope"), dict):
         scope = ch.get("knowledge_scope", {})
         if isinstance(scope, dict):
             cannot = scope.get("cannot", []) or []
-            if isinstance(cannot, list) and any(isinstance(x, str) and x.lower() in question.lower() for x in cannot):
-                enriched_q = "[You do not know about that topic; answer honestly within your limits.]\n" + enriched_q
+            # If question hits a forbidden topic, prepend a hard refusal instruction
+            if isinstance(cannot, list) and any(
+                isinstance(x, str) and x.strip() and x.lower() in question.lower() for x in cannot
+            ):
+                refused = True
+                enriched_q = (
+                    "[You must refuse to answer because you do not know about that topic. Say you don't know or can't speak to it.]\n"
+                    + enriched_q
+                )
             allowed = scope.get("allowed", []) or []
-            # no-op for allowed; could bias later
+            # If allowed topics exist, bias the model to stay within them when relevant
+            if isinstance(allowed, list) and allowed:
+                enriched_q = (
+                    "[Keep your response within your known domains: "
+                    + ", ".join(a for a in allowed if isinstance(a, str) and a.strip())
+                    + ". If the question is outside these, acknowledge limits.]\n"
+                    + enriched_q
+                )
     if ok and ch and isinstance(ch.get("personality"), dict):
         honesty = (ch.get("personality", {}) or {}).get("honesty")
         if honesty == "deceptive":
@@ -79,6 +94,11 @@ async def answer_in_character(
                 + enriched_q
             )
     answer = await ask_character(character_agent, enriched_q, memory)
+    # Post-guard: if we instructed refusal, ensure the output doesn't leak specific forbidden info
+    if refused and any(
+        isinstance(x, str) and x.strip() and x.lower() in answer.lower() for x in (ch.get("knowledge_scope", {}) or {}).get("cannot", []) or []
+    ):
+        answer = "I don’t know about that. It’s not something I can speak to."
     return answer
 
 
