@@ -321,6 +321,23 @@ def upsert_case(
         return False, str(e)
 
 
+def update_case_status(room_code: str, status: str) -> Tuple[bool, Optional[str]]:
+    """Update only the status field of a case for a room."""
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        _ = (
+            supabase.table("cases")
+            .update({"status": status})
+            .eq("room_code", room_code)
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB update_case_status warning:", e)
+        return False, str(e)
+
+
 def upsert_case_character(
     room_code: str,
     name: str,

@@ -63,6 +63,7 @@ try:
         get_case_character as db_get_case_character,
         get_case_characters_min as db_get_case_characters_min,
         update_case_character_scope as db_update_case_character_scope,
+        update_case_status as db_update_case_status,
     )
 except Exception:
     from db import (
@@ -82,6 +83,7 @@ except Exception:
         get_case_character as db_get_case_character,
         get_case_characters_min as db_get_case_characters_min,
         update_case_character_scope as db_update_case_character_scope,
+        update_case_status as db_update_case_status,
     )
 
     try:
@@ -141,6 +143,31 @@ async def get_room_characters(code: str):
         raise HTTPException(status_code=500, detail="Failed to fetch characters")
 
 
+@app.post("/rooms/{code}/status")
+async def set_case_status_http(code: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    status = (body or {}).get("status")
+    if not isinstance(status, str) or not status.strip():
+        raise HTTPException(status_code=400, detail="Missing status")
+    status = status.strip().lower()
+    allowed = {"open", "investigation", "interrogation", "accusation", "closed"}
+    if status not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    try:
+        ok, err = db_update_case_status(code, status)
+        if not ok:
+            raise HTTPException(status_code=500, detail=err or "Update failed")
+        return {"ok": True, "status": status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"POST /rooms/{code}/status failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update status")
+
+
 @app.get("/rooms/{code}/characters/{name}")
 async def get_room_character_detail(code: str, name: str):
     try:
@@ -166,6 +193,7 @@ async def set_room_character_scope(code: str, name: str, request: Request):
     scope = body.get("knowledge_scope")
     if not isinstance(scope, dict):
         raise HTTPException(status_code=400, detail="knowledge_scope must be an object")
+
     # normalize lists to arrays of strings
     def _norm_list(val):
         if isinstance(val, list):
@@ -179,6 +207,7 @@ async def set_room_character_scope(code: str, name: str, request: Request):
                     out.append(s)
             return out
         return []
+
     normalized = {
         "allowed": _norm_list(scope.get("allowed", [])),
         "cannot": _norm_list(scope.get("cannot", [])),
