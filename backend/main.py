@@ -168,6 +168,83 @@ async def set_case_status_http(code: str, request: Request):
         raise HTTPException(status_code=500, detail="Failed to update status")
 
 
+@app.post("/rooms/{code}/summary")
+async def set_case_summary_http(code: str, request: Request):
+    """Update selected keys in cases.summary, preserving others."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    # Load existing summary
+    ok, framework = db_get_case_framework(code)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Database error")
+    existing_summary = {}
+    if framework and isinstance(framework.get("case"), dict):
+        cur_case = framework.get("case") or {}
+        cur_summary = cur_case.get("summary")
+        if isinstance(cur_summary, dict):
+            existing_summary = dict(cur_summary)
+    # Allowed fields to update
+    fields = ["victim", "motive", "weapon", "location", "time", "narrative"]
+    merged = dict(existing_summary)
+    for f in fields:
+        if f in body and isinstance(body.get(f), (str, type(None))):
+            val = body.get(f)
+            if val is None:
+                merged.pop(f, None)
+            else:
+                merged[f] = str(val)
+    # Persist via upsert_case
+    try:
+        ok2, err = db_upsert_case(code, status=(framework.get("case", {}).get("status") or "open"), seed=code, summary=merged)
+        if not ok2:
+            raise HTTPException(status_code=500, detail=err or "Update failed")
+        return {"ok": True, "summary": merged}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"POST /rooms/{code}/summary failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update summary")
+
+
+@app.post("/rooms/{code}/characters/{name}")
+async def set_character_profile_http(code: str, name: str, request: Request):
+    """Update character role/personality minimally via upsert."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    role = body.get("role")
+    personality = body.get("personality")
+    if role is not None and not isinstance(role, str):
+        raise HTTPException(status_code=400, detail="role must be string")
+    if personality is not None and not isinstance(personality, dict):
+        raise HTTPException(status_code=400, detail="personality must be object")
+    # Get existing to preserve
+    ok, ch = db_get_case_character(code, name)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Database error")
+    current_role = ch.get("role") if ch else None
+    current_personality = ch.get("personality") if ch else None
+    try:
+        ok2, err = db_upsert_case_character(
+            room_code=code,
+            name=name,
+            role=str(role or current_role or "suspect"),
+            personality=personality or current_personality or {},
+            knowledge_scope=(ch.get("knowledge_scope") if ch else None),
+        )
+        if not ok2:
+            raise HTTPException(status_code=500, detail=err or "Update failed")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"POST /rooms/{code}/characters/{name} failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update character")
+
+
 @app.get("/rooms/{code}/characters/{name}")
 async def get_room_character_detail(code: str, name: str):
     try:
