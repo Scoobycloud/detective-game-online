@@ -62,6 +62,7 @@ try:
         get_case_framework as db_get_case_framework,
         get_case_character as db_get_case_character,
         get_case_characters_min as db_get_case_characters_min,
+        update_case_character_scope as db_update_case_character_scope,
     )
 except Exception:
     from db import (
@@ -80,6 +81,7 @@ except Exception:
         get_case_framework as db_get_case_framework,
         get_case_character as db_get_case_character,
         get_case_characters_min as db_get_case_characters_min,
+        update_case_character_scope as db_update_case_character_scope,
     )
 
     try:
@@ -137,6 +139,60 @@ async def get_room_characters(code: str):
     except Exception as e:
         log.error(f"GET /rooms/{code}/characters failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch characters")
+
+
+@app.get("/rooms/{code}/characters/{name}")
+async def get_room_character_detail(code: str, name: str):
+    try:
+        ok, ch = db_get_case_character(code, name)
+        if not ok:
+            raise HTTPException(status_code=500, detail="Database error")
+        if not ch:
+            raise HTTPException(status_code=404, detail="Not found")
+        return {"success": True, "character": ch}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"GET /rooms/{code}/characters/{name} failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch character")
+
+
+@app.post("/rooms/{code}/characters/{name}/knowledge_scope")
+async def set_room_character_scope(code: str, name: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    scope = body.get("knowledge_scope")
+    if not isinstance(scope, dict):
+        raise HTTPException(status_code=400, detail="knowledge_scope must be an object")
+    # normalize lists to arrays of strings
+    def _norm_list(val):
+        if isinstance(val, list):
+            out = []
+            for x in val:
+                try:
+                    s = str(x).strip()
+                except Exception:
+                    s = ""
+                if s:
+                    out.append(s)
+            return out
+        return []
+    normalized = {
+        "allowed": _norm_list(scope.get("allowed", [])),
+        "cannot": _norm_list(scope.get("cannot", [])),
+    }
+    try:
+        ok, err = db_update_case_character_scope(code, name, normalized)
+        if not ok:
+            raise HTTPException(status_code=500, detail=err or "Update failed")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"POST /rooms/{code}/characters/{name}/knowledge_scope failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update knowledge_scope")
 
 
 """
@@ -1382,7 +1438,9 @@ async def create_structured_game(code: str, request: Request):
                             parts[3],
                         )
                         # Optional 5th part: character_name link
-                        character_name = parts[4] if len(parts) >= 5 and parts[4] else None
+                        character_name = (
+                            parts[4] if len(parts) >= 5 and parts[4] else None
+                        )
 
                         # Smart merge: skip duplicates
                         ev_key = (_norm(title), _norm(ev_type), _norm(location))
@@ -1429,7 +1487,9 @@ async def create_structured_game(code: str, request: Request):
                     if len(parts) >= 3:
                         text, clue_type, source = parts[0], parts[1], parts[2]
                         # Optional 4th part: character_name link
-                        character_name = parts[3] if len(parts) >= 4 and parts[3] else None
+                        character_name = (
+                            parts[3] if len(parts) >= 4 and parts[3] else None
+                        )
 
                         # Validate clue type
                         if clue_type not in ["IMPORTANT", "CONTRADICTION"]:
@@ -1445,7 +1505,9 @@ async def create_structured_game(code: str, request: Request):
                         from db import add_clue as _add_clue
 
                         if _add_clue:
-                            ok, result = _add_clue(code, text, clue_type, source, None, character_name)
+                            ok, result = _add_clue(
+                                code, text, clue_type, source, None, character_name
+                            )
                             if ok:
                                 clues_count += 1
                                 log.info(f"Inserted clue: {text[:50]}...")

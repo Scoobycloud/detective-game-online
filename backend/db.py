@@ -513,6 +513,26 @@ def get_case_character(
         return False, None
 
 
+def update_case_character_scope(
+    room_code: str, name: str, knowledge_scope: Dict[str, Any]
+) -> Tuple[bool, Optional[str]]:
+    """Update only the knowledge_scope for a character row."""
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        _ = (
+            supabase.table("case_characters")
+            .update({"knowledge_scope": knowledge_scope})
+            .eq("room_code", room_code)
+            .eq("name", name)
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB update_case_character_scope warning:", e)
+        return False, str(e)
+
+
 def get_evidence_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
     if not supabase:
         return False, []
