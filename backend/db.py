@@ -115,6 +115,36 @@ def debug_status() -> Dict[str, Any]:
     }
 
 
+def ensure_user(user_id: str, email: Optional[str]) -> Tuple[bool, Optional[str]]:
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        # Upsert by user_id
+        _ = (
+            supabase.table("users")
+            .upsert({"user_id": user_id, "email": email})
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB ensure_user warning:", e)
+        return False, str(e)
+
+
+def get_user_admin(user_id: str) -> Tuple[bool, Optional[bool]]:
+    if not supabase:
+        return False, None
+    try:
+        res = supabase.table("users").select("is_admin").eq("user_id", user_id).limit(1).execute()
+        rows = getattr(res, "data", []) or []
+        if not rows:
+            return True, None
+        return True, bool(rows[0].get("is_admin"))
+    except Exception as e:
+        print("DB get_user_admin warning:", e)
+        return False, None
+
+
 # ==============================
 # Optional: transcripts and clues
 # ==============================

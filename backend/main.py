@@ -65,6 +65,8 @@ try:
         get_case_characters_min as db_get_case_characters_min,
         update_case_character_scope as db_update_case_character_scope,
         update_case_status as db_update_case_status,
+        ensure_user as db_ensure_user,
+        get_user_admin as db_get_user_admin,
     )
 except Exception:
     from db import (
@@ -85,6 +87,8 @@ except Exception:
         get_case_characters_min as db_get_case_characters_min,
         update_case_character_scope as db_update_case_character_scope,
         update_case_status as db_update_case_status,
+        ensure_user as db_ensure_user,
+        get_user_admin as db_get_user_admin,
     )
 
     try:
@@ -142,6 +146,31 @@ async def get_room_characters(code: str):
     except Exception as e:
         log.error(f"GET /rooms/{code}/characters failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch characters")
+
+
+@app.get("/auth/me")
+async def auth_me(request: Request):
+    # Expect optional Firebase ID token via Authorization: Bearer <token>
+    try:
+        auth_header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+        token = ""
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+        if not token or not fb_auth:
+            return {"authenticated": False}
+        decoded = fb_auth.verify_id_token(token)
+        user_id = decoded.get("uid")
+        email = decoded.get("email")
+        is_admin = False
+        try:
+            ok, flag = db_get_user_admin(user_id)
+            if ok and flag is not None:
+                is_admin = bool(flag)
+        except Exception:
+            pass
+        return {"authenticated": True, "user_id": user_id, "email": email, "is_admin": is_admin}
+    except Exception as e:
+        return {"authenticated": False, "error": str(e)}
 
 
 @app.post("/rooms/{code}/status")
@@ -282,7 +311,9 @@ async def submit_accusation_http(code: str, request: Request):
     now_iso = datetime.now(timezone.utc).isoformat()
     verdict = None
     if isinstance(murderer, str) and murderer.strip():
-        verdict = "correct" if murderer.strip().lower() == suspect.lower() else "incorrect"
+        verdict = (
+            "correct" if murderer.strip().lower() == suspect.lower() else "incorrect"
+        )
     accusation = {"suspect": suspect, "rationale": rationale, "at": now_iso}
     if verdict:
         accusation["verdict"] = verdict
@@ -292,7 +323,9 @@ async def submit_accusation_http(code: str, request: Request):
 
     # Persist: set status to closed and update summary
     try:
-        ok2, err = db_upsert_case(code, status="closed", seed=code, summary=merged_summary)
+        ok2, err = db_upsert_case(
+            code, status="closed", seed=code, summary=merged_summary
+        )
         if not ok2:
             raise HTTPException(status_code=500, detail=err or "Update failed")
         return {"ok": True, "status": "closed", "verdict": verdict}
@@ -984,6 +1017,11 @@ async def join_role(sid, data):
         try:
             decoded = fb_auth.verify_id_token(id_token)
             user_id = decoded.get("uid")
+            # Ensure user exists in DB (best-effort)
+            try:
+                db_ensure_user(user_id, decoded.get("email"))
+            except Exception:
+                pass
         except Exception as e:
             log.info(f"Firebase token verification failed: {e}")
 
