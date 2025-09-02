@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 import logging
 import openai
 import json
+from datetime import datetime, timezone
 
 # === NEW: sockets bits ===
 import socketio
@@ -197,7 +198,12 @@ async def set_case_summary_http(code: str, request: Request):
                 merged[f] = str(val)
     # Persist via upsert_case
     try:
-        ok2, err = db_upsert_case(code, status=(framework.get("case", {}).get("status") or "open"), seed=code, summary=merged)
+        ok2, err = db_upsert_case(
+            code,
+            status=(framework.get("case", {}).get("status") or "open"),
+            seed=code,
+            summary=merged,
+        )
         if not ok2:
             raise HTTPException(status_code=500, detail=err or "Update failed")
         return {"ok": True, "summary": merged}
@@ -243,6 +249,58 @@ async def set_character_profile_http(code: str, name: str, request: Request):
     except Exception as e:
         log.error(f"POST /rooms/{code}/characters/{name} failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to update character")
+
+
+@app.post("/rooms/{code}/accuse")
+async def submit_accusation_http(code: str, request: Request):
+    """Submit an accusation, record it in summary, and close the case."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    suspect = ((body or {}).get("suspect") or "").strip()
+    rationale = ((body or {}).get("rationale") or "").strip()
+    if not suspect:
+        raise HTTPException(status_code=400, detail="Missing suspect")
+
+    # Load framework for current summary and murderer (if any)
+    ok, framework = db_get_case_framework(code)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Database error")
+    existing_summary = {}
+    current_status = "open"
+    murderer = None
+    if framework and isinstance(framework.get("case"), dict):
+        cur_case = framework.get("case") or {}
+        current_status = cur_case.get("status") or current_status
+        cur_summary = cur_case.get("summary")
+        if isinstance(cur_summary, dict):
+            existing_summary = dict(cur_summary)
+            murderer = (cur_summary or {}).get("murderer")
+
+    # Build accusation record
+    now_iso = datetime.now(timezone.utc).isoformat()
+    verdict = None
+    if isinstance(murderer, str) and murderer.strip():
+        verdict = "correct" if murderer.strip().lower() == suspect.lower() else "incorrect"
+    accusation = {"suspect": suspect, "rationale": rationale, "at": now_iso}
+    if verdict:
+        accusation["verdict"] = verdict
+
+    merged_summary = dict(existing_summary)
+    merged_summary["accusation"] = accusation
+
+    # Persist: set status to closed and update summary
+    try:
+        ok2, err = db_upsert_case(code, status="closed", seed=code, summary=merged_summary)
+        if not ok2:
+            raise HTTPException(status_code=500, detail=err or "Update failed")
+        return {"ok": True, "status": "closed", "verdict": verdict}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"POST /rooms/{code}/accuse failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit accusation")
 
 
 @app.get("/rooms/{code}/characters/{name}")
