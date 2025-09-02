@@ -8,13 +8,22 @@ async def ask_character(agent, question: str, memory):
     memory_text = "\n".join(
         f"{entry['speaker']}: {entry['content']}" for entry in memory.get()
     )
-    prompt = f"{system_prompt}\n\nPrevious conversation:\n{memory_text}\n\nNow reply ONLY as {agent.name} to this question: \"{question}\"\n\nDo not include any detective dialogue or questions in your response."
+    convo_guidelines = (
+        "Guidelines: Be natural, concise, and context-aware. Answer only what was asked. "
+        "If the detective's input is unclear or not a question, ask for a brief clarification in character. "
+        "Do not repeat the same alibi or stock lines verbatim unless directly relevant. "
+        "Stay consistent with prior statements and the case context. Do not include any detective dialogue."
+    )
+    prompt = (
+        f"{system_prompt}\n\n{convo_guidelines}\n\nPrevious conversation:\n{memory_text}\n\n"
+        f"Now reply ONLY as {agent.name} to this question: \"{question}\""
+    )
 
     # === Get character's response ===
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
+        temperature=0.5,
     )
     answer = response.choices[0].message.content.strip()
 
