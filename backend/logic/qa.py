@@ -2,28 +2,40 @@ import openai
 import json
 import re
 
+
 async def ask_character(agent, question: str, memory):
     # === Build prompt with system prompt and memory ===
     system_prompt = agent.system_prompt
     memory_text = "\n".join(
         f"{entry['speaker']}: {entry['content']}" for entry in memory.get()
     )
+    off_topic_triggers = [
+        "joke", "funny", "make me laugh", "tell me a joke", "humour", "humor", "sing", "riddle"
+    ]
+    is_off_topic = any(t in question.lower() for t in off_topic_triggers)
     convo_guidelines = (
         "Guidelines: Be natural, concise, and context-aware. Answer only what was asked. "
         "If the detective's input is unclear or not a question, ask for a brief clarification in character. "
+        "If the input is off-topic (e.g., a joke request), politely deflect and steer back to the investigation. "
         "Do not repeat the same alibi or stock lines verbatim unless directly relevant. "
+        "Speak in first-person as the character (no stage directions or third-person narration). "
         "Stay consistent with prior statements and the case context. Do not include any detective dialogue."
     )
+    off_topic_preface = (
+        "The detective's prompt appears off-topic or frivolous; provide a brief, polite deflection and steer back to relevant case details. "
+        "If appropriate, ask a short clarifying question tied to the case."
+        if is_off_topic else ""
+    )
     prompt = (
-        f"{system_prompt}\n\n{convo_guidelines}\n\nPrevious conversation:\n{memory_text}\n\n"
-        f"Now reply ONLY as {agent.name} to this question: \"{question}\""
+        f"{system_prompt}\n\n{convo_guidelines}\n{off_topic_preface}\n\nPrevious conversation:\n{memory_text}\n\n"
+        f'Now reply ONLY as {agent.name} to this question: "{question}"'
     )
 
     # === Get character's response ===
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.5,
+        temperature=0.35,
     )
     answer = response.choices[0].message.content.strip()
 
