@@ -10,7 +10,14 @@ async def ask_character(agent, question: str, memory):
         f"{entry['speaker']}: {entry['content']}" for entry in memory.get()
     )
     off_topic_triggers = [
-        "joke", "funny", "make me laugh", "tell me a joke", "humour", "humor", "sing", "riddle"
+        "joke",
+        "funny",
+        "make me laugh",
+        "tell me a joke",
+        "humour",
+        "humor",
+        "sing",
+        "riddle",
     ]
     is_off_topic = any(t in question.lower() for t in off_topic_triggers)
     convo_guidelines = (
@@ -24,7 +31,8 @@ async def ask_character(agent, question: str, memory):
     off_topic_preface = (
         "The detective's prompt appears off-topic or frivolous; provide a brief, polite deflection and steer back to relevant case details. "
         "If appropriate, ask a short clarifying question tied to the case."
-        if is_off_topic else ""
+        if is_off_topic
+        else ""
     )
     prompt = (
         f"{system_prompt}\n\n{convo_guidelines}\n{off_topic_preface}\n\nPrevious conversation:\n{memory_text}\n\n"

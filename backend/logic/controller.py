@@ -2,9 +2,15 @@ from typing import Any, Dict, Optional, Tuple, List
 
 try:
     # local import pattern
-    from ..db import get_case_framework as db_get_case_framework, get_case_character as db_get_case_character
+    from ..db import (
+        get_case_framework as db_get_case_framework,
+        get_case_character as db_get_case_character,
+    )
 except Exception:
-    from db import get_case_framework as db_get_case_framework, get_case_character as db_get_case_character  # type: ignore
+    from db import (
+        get_case_framework as db_get_case_framework,
+        get_case_character as db_get_case_character,
+    )  # type: ignore
 
 from .qa import ask_character, extract_clues_from_reply
 
@@ -65,7 +71,8 @@ async def answer_in_character(
             cannot = scope.get("cannot", []) or []
             # If question hits a forbidden topic, prepend a hard refusal instruction
             if isinstance(cannot, list) and any(
-                isinstance(x, str) and x.strip() and x.lower() in question.lower() for x in cannot
+                isinstance(x, str) and x.strip() and x.lower() in question.lower()
+                for x in cannot
             ):
                 refused = True
                 enriched_q = (
@@ -96,7 +103,8 @@ async def answer_in_character(
     answer = await ask_character(character_agent, enriched_q, memory)
     # Post-guard: if we instructed refusal, ensure the output doesn't leak specific forbidden info
     if refused and any(
-        isinstance(x, str) and x.strip() and x.lower() in answer.lower() for x in (ch.get("knowledge_scope", {}) or {}).get("cannot", []) or []
+        isinstance(x, str) and x.strip() and x.lower() in answer.lower()
+        for x in (ch.get("knowledge_scope", {}) or {}).get("cannot", []) or []
     ):
         answer = "I don’t know about that. It’s not something I can speak to."
     return answer
@@ -144,15 +152,16 @@ async def generate_structured_answer(
         "Answer ONLY as the character. Also return STRICT JSON ops to update case state."
     )
     user = (
-        f"Case context: {context}\n" +
-        f"Conversation so far:\n{memory_text}\n\n" +
-        f"Character: {character_name}\nQuestion: {question}\n\n" +
-        "Return a JSON object with keys: answer (string), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
+        f"Case context: {context}\n"
+        + f"Conversation so far:\n{memory_text}\n\n"
+        + f"Character: {character_name}\nQuestion: {question}\n\n"
+        + "Return a JSON object with keys: answer (string), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
         "Include only case-relevant clues (IMPORTANT or CONTRADICTION). "
-        "Example: {\"answer\": \"...\", \"clues\":[{\"text\":\"She has no sister\",\"type\":\"IMPORTANT\"}], \"evidence_ops\":[], \"timeline_ops\":[], \"alibi_ops\":[]}"
+        'Example: {"answer": "...", "clues":[{"text":"She has no sister","type":"IMPORTANT"}], "evidence_ops":[], "timeline_ops":[], "alibi_ops":[]}'
     )
     try:
         import openai
+
         resp = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -163,6 +172,7 @@ async def generate_structured_answer(
         )
         raw = resp.choices[0].message.content or ""
         import json
+
         parsed = json.loads(raw)
         answer = str(parsed.get("answer", "")).strip()
         # Save answer to memory (like ask_character does)
@@ -177,25 +187,48 @@ async def generate_structured_answer(
         return answer, ops
     except Exception:
         # fallback to plain answer + no ops
-        ans = await answer_in_character(room_code, character_agent, character_name, question, memory)
-        return ans, {"clues": [], "evidence_ops": [], "timeline_ops": [], "alibi_ops": []}
+        ans = await answer_in_character(
+            room_code, character_agent, character_name, question, memory
+        )
+        return ans, {
+            "clues": [],
+            "evidence_ops": [],
+            "timeline_ops": [],
+            "alibi_ops": [],
+        }
 
 
 def _safe_str(x: Any) -> str:
     return (str(x) if x is not None else "").strip()
 
 
-def apply_ops(room_code: str, character_name: str, ops: Dict[str, Any], memory: Any) -> Dict[str, bool]:
+def apply_ops(
+    room_code: str, character_name: str, ops: Dict[str, Any], memory: Any
+) -> Dict[str, bool]:
     """Apply controller ops to DB and memory. Returns which domains changed."""
     changed = {"clues": False, "evidence": False, "timeline": False, "alibis": False}
     # Lazy imports to avoid cycles
     try:
-        from ..db import add_clue as db_add_clue, insert_evidence as db_insert_evidence, mark_evidence_discovered as db_mark_discovered
-        from ..db import insert_timeline_event as db_insert_timeline_event, insert_alibi as db_insert_alibi
+        from ..db import (
+            add_clue as db_add_clue,
+            insert_evidence as db_insert_evidence,
+            mark_evidence_discovered as db_mark_discovered,
+        )
+        from ..db import (
+            insert_timeline_event as db_insert_timeline_event,
+            insert_alibi as db_insert_alibi,
+        )
         from ..db import get_case_character as db_get_case_character
     except Exception:
-        from db import add_clue as db_add_clue, insert_evidence as db_insert_evidence, mark_evidence_discovered as db_mark_discovered
-        from db import insert_timeline_event as db_insert_timeline_event, insert_alibi as db_insert_alibi
+        from db import (
+            add_clue as db_add_clue,
+            insert_evidence as db_insert_evidence,
+            mark_evidence_discovered as db_mark_discovered,
+        )
+        from db import (
+            insert_timeline_event as db_insert_timeline_event,
+            insert_alibi as db_insert_alibi,
+        )
         from db import get_case_character as db_get_case_character
 
     # clues
@@ -204,7 +237,9 @@ def apply_ops(room_code: str, character_name: str, ops: Dict[str, Any], memory: 
     try:
         ok_ch, ch = db_get_case_character(room_code, character_name)
         if ok_ch and ch and isinstance(ch.get("personality"), dict):
-            is_deceptive = (ch.get("personality", {}) or {}).get("honesty") == "deceptive"
+            is_deceptive = (ch.get("personality", {}) or {}).get(
+                "honesty"
+            ) == "deceptive"
     except Exception:
         pass
     for c in ops.get("clues", []) or []:
@@ -213,7 +248,13 @@ def apply_ops(room_code: str, character_name: str, ops: Dict[str, Any], memory: 
         if text and ctype in allowed:
             memory.add_clue(text, clue_type=ctype, source=character_name)
             try:
-                db_add_clue(room_code, text=text, clue_type=ctype, source=character_name, timestamp=None)
+                db_add_clue(
+                    room_code,
+                    text=text,
+                    clue_type=ctype,
+                    source=character_name,
+                    timestamp=None,
+                )
             except Exception:
                 pass
             changed["clues"] = True
@@ -284,12 +325,12 @@ def apply_ops(room_code: str, character_name: str, ops: Dict[str, Any], memory: 
                 character=_safe_str(a.get("character")) or character_name,
                 timeframe=_safe_str(a.get("timeframe")) or "",
                 account=_safe_str(a.get("account")) or "",
-                credibility_score=float(a.get("credibility_score")) if a.get("credibility_score") is not None else None,
+                credibility_score=float(a.get("credibility_score"))
+                if a.get("credibility_score") is not None
+                else None,
             )
             changed["alibis"] = True
         except Exception:
             pass
 
     return changed
-
-
