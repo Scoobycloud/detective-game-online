@@ -824,13 +824,32 @@ def write_knowledge(data: dict) -> bool:
         return False
 
 def is_authorized(request: Request) -> bool:
-    token = os.getenv("ADMIN_TOKEN")
-    if not token:
-        return False
+    """
+    Accept either:
+    - Static ADMIN_TOKEN via X-Admin-Token or Authorization: Bearer <token>
+    - Firebase Bearer token for a user flagged as admin in DB
+    """
+    # Static admin token
+    static = os.getenv("ADMIN_TOKEN") or ""
     hdr = request.headers.get("x-admin-token") or request.headers.get("authorization", "")
     if hdr.lower().startswith("bearer "):
-        hdr = hdr[7:]
-    return hdr == token
+        bearer = hdr.split(" ", 1)[1].strip()
+    else:
+        bearer = hdr.strip()
+    if static and bearer == static:
+        return True
+    # Firebase admin via bearer
+    try:
+        if fb_auth and bearer and hdr.lower().startswith("bearer "):
+            decoded = fb_auth.verify_id_token(bearer)
+            uid = decoded.get("uid")
+            if uid and "db_get_user_admin" in globals() and db_get_user_admin:
+                ok, flag = db_get_user_admin(uid)
+                if ok and flag:
+                    return True
+    except Exception:
+        pass
+    return False
 
 
 def normalize_name(name: str | None) -> str:
