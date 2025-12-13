@@ -12,7 +12,7 @@ except Exception:
         get_case_character as db_get_case_character,
     )  # type: ignore
 
-from .qa import ask_character, extract_clues_from_reply
+from .qa import ask_character, extract_clues_from_reply, load_knowledge, build_knowledge_text
 
 
 def _build_case_context_text(room_code: str) -> str:
@@ -146,17 +146,24 @@ async def generate_structured_answer(
       }
     """
     context = _build_case_context_text(room_code)
-    memory_text = "\n".join(f"{m['speaker']}: {m['content']}" for m in memory.get())
+    # Limit dialogue to Detective <-> this character only
+    dialogue = memory.get_dialogue_for(character_name)
+    memory_text = "\n".join(f"{m['speaker']}: {m['content']}" for m in dialogue)
+    # Attach explicit knowledge block
+    knowledge = load_knowledge()
+    knowledge_text = build_knowledge_text(character_name, knowledge)
     system = (
         "You are the Narrative Controller ensuring consistency with the case framework. "
         "Answer ONLY as the character. Also return STRICT JSON ops to update case state."
     )
     user = (
         f"Case context: {context}\n"
-        + f"Conversation so far:\n{memory_text}\n\n"
+        + f"Conversation so far (Detective <-> {character_name} only):\n{memory_text}\n\n"
+        + f"{character_name}'s provided knowledge (do NOT invent beyond this):\n{knowledge_text}\n\n"
         + f"Character: {character_name}\nQuestion: {question}\n\n"
         + "Return a JSON object with keys: answer (string), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
         "Include only case-relevant clues (IMPORTANT or CONTRADICTION). "
+        "Do NOT reference statements from other witnesses unless explicitly in the knowledge block above. "
         'Example: {"answer": "...", "clues":[{"text":"She has no sister","type":"IMPORTANT"}], "evidence_ops":[], "timeline_ops":[], "alibi_ops":[]}'
     )
     try:
