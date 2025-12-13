@@ -2,67 +2,84 @@
   "Mrs. Bellamy": {
     "background": [
       "Retired schoolteacher; fussy, observant, and gossipy.",
-      "Baking a pie at 9am; claims she couldn't leave the oven."
+      "Baking a pie at 9:00; claims she couldn't leave the oven unattended.",
+      "Has excellent recall for domestic routines on the street (bins day, post times).",
+      "Keeps lace curtains cracked open to watch the street."
     ],
     "about": {
       "Mr. Holloway": [
-        "Keeps a strict gardening routine and notes neighborhood events in a notebook."
+        "Keeps a strict gardening routine; notes neighborhood comings and goings in a pocket notebook.",
+        "Complains to the council about noise and litter."
       ],
       "Tommy the Janitor": [
-        "Often seen mopping the ground floor around mornings; keeps to himself."
+        "Often seen mopping the ground floor between 8:45 and 9:30; keeps to himself.",
+        "Has a soft spot for Ella in 2B."
       ],
       "Dr. Adrian Blackwood": [
-        "Respected surgeon; maintains a polished public image."
+        "Respected surgeon; maintains a polished public image.",
+        "Leaves early most mornings; returns late; always impeccably dressed."
       ]
     }
   },
   "Mr. Holloway": {
     "background": [
       "Retired civil servant; values routine and order.",
-      "Claims he was pruning hydrangeas from 8:30 to 9:30."
+      "Claims he was pruning hydrangeas from 8:30 to 9:30 as every Thursday.",
+      "Keeps timestamps on garden tasks in his notebook."
     ],
     "about": {
       "Mrs. Bellamy": [
-        "Observant neighbor who tends to gossip about minor details."
+        "Observant neighbor who tends to gossip about minor details.",
+        "Runs her oven on high for pies; the kitchen window steams up."
       ],
       "Tommy the Janitor": [
-        "Often around the building hallways; not very talkative."
+        "Often around the building hallways; not very talkative.",
+        "Carries a ring of keys and a squeaky trolley."
       ],
       "Dr. Adrian Blackwood": [
-        "Professional demeanor; polite in public."
+        "Professional demeanor; polite in public.",
+        "Drives a dark saloon; parks facing east."
       ]
     }
   },
   "Tommy the Janitor": {
     "background": [
       "Building janitor; gruff but observant.",
-      "Was mopping ground floor hallway around 9am."
+      "Was mopping ground floor hallway around 9:00.",
+      "Knows which flats have sticky locks and loose latches."
     ],
     "about": {
       "Mrs. Bellamy": [
-        "Always peeking through the curtains; knows what's going on."
+        "Always peeking through the curtains; knows what's going on.",
+        "Leaves flour on the landing when she bakes."
       ],
       "Mr. Holloway": [
-        "Routine-driven; keeps records."
+        "Routine-driven; keeps records.",
+        "Hydrangea clippings fill the green bin every Thursday."
       ],
       "Dr. Adrian Blackwood": [
-        "Keeps his head down; few words outside the hospital."
+        "Keeps his head down; few words outside the hospital.",
+        "Gets parcels marked 'fragile instruments' twice a month."
       ]
     }
   },
   "Dr. Adrian Blackwood": {
     "background": [
-      "Respected surgeon; calm exterior; protective of reputation."
+      "Respected surgeon; calm exterior; protective of reputation.",
+      "Keeps a tidy schedule; dislikes delays."
     ],
     "about": {
       "Mrs. Bellamy": [
-        "Long-time neighbor of the victim; tends to gossip."
+        "Long-time neighbor of the victim; tends to gossip.",
+        "Has a habit of 'tidying' others' rubbish bins."
       ],
       "Mr. Holloway": [
-        "Dislikes disruptions; watches the street closely."
+        "Dislikes disruptions; watches the street closely.",
+        "Wears gardening gloves even for light jobs."
       ],
       "Tommy the Janitor": [
-        "Present in common areas; hears more than people assume."
+        "Present in common areas; hears more than people assume.",
+        "Knows which residents skip paying maintenance on time."
       ]
     }
   }

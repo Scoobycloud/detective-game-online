@@ -18,6 +18,7 @@ import logging
 import openai
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 # === NEW: sockets bits ===
 import socketio
@@ -596,6 +597,29 @@ async def get_room_clues(code: str):
         return {"error": "Room not found"}
     return room["memory"].get_clues()
 
+@app.get("/admin/knowledge")
+async def admin_get_knowledge(request: Request):
+    if not is_authorized(request):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return read_knowledge()
+
+@app.put("/admin/knowledge")
+async def admin_put_knowledge(request: Request):
+    if not is_authorized(request):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    try:
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise HTTPException(status_code=400, detail="invalid payload")
+        ok = write_knowledge(data)
+        if not ok:
+            raise HTTPException(status_code=500, detail="write_failed")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.get("/debug/supabase")
 async def debug_supabase():
@@ -780,6 +804,33 @@ WAITING: Dict[str, set[str]] = {
 
 def find_character(name: str):
     return next((c for c in characters if c.name == name), None)
+
+KNOWLEDGE_PATH = Path("backend/state/knowledge.json")
+
+def read_knowledge() -> dict:
+    try:
+        if KNOWLEDGE_PATH.exists():
+            return json.loads(KNOWLEDGE_PATH.read_text())
+    except Exception as e:
+        log.info(f"Failed reading knowledge: {e}")
+    return {}
+
+def write_knowledge(data: dict) -> bool:
+    try:
+        KNOWLEDGE_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        return True
+    except Exception as e:
+        log.info(f"Failed writing knowledge: {e}")
+        return False
+
+def is_authorized(request: Request) -> bool:
+    token = os.getenv("ADMIN_TOKEN")
+    if not token:
+        return False
+    hdr = request.headers.get("x-admin-token") or request.headers.get("authorization", "")
+    if hdr.lower().startswith("bearer "):
+        hdr = hdr[7:]
+    return hdr == token
 
 
 def normalize_name(name: str | None) -> str:
