@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 
-KNOWLEDGE_FILE = Path("backend/state/knowledge.json")
+KNOWLEDGE_FILE = Path(__file__).resolve().parent.parent / "state" / "knowledge.json"
 
 def load_knowledge():
     try:

@@ -805,7 +805,8 @@ WAITING: Dict[str, set[str]] = {
 def find_character(name: str):
     return next((c for c in characters if c.name == name), None)
 
-KNOWLEDGE_PATH = Path("backend/state/knowledge.json")
+BASE_DIR = Path(__file__).resolve().parent
+KNOWLEDGE_PATH = BASE_DIR / "state" / "knowledge.json"
 
 def read_knowledge() -> dict:
     try:
