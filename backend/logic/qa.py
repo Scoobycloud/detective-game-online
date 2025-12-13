@@ -1,13 +1,44 @@
 import openai
 import json
 import re
+from pathlib import Path
 
+
+KNOWLEDGE_FILE = Path("backend/state/knowledge.json")
+
+def load_knowledge():
+    try:
+        if KNOWLEDGE_FILE.exists():
+            return json.loads(KNOWLEDGE_FILE.read_text())
+    except Exception as e:
+        print("Failed to load knowledge.json:", e)
+    return {}
+
+def build_knowledge_text(character_name: str, knowledge: dict) -> str:
+    data = knowledge.get(character_name, {})
+    background = data.get("background", [])
+    about = data.get("about", {})
+
+    lines = []
+    if background:
+        lines.append("Background knowledge:")
+        for item in background:
+            lines.append(f"- {item}")
+    if about:
+        lines.append("Knowledge about other witnesses:")
+        for other, facts in about.items():
+            if facts:
+                lines.append(f"- About {other}:")
+                for fact in facts:
+                    lines.append(f"  • {fact}")
+    return "\n".join(lines) if lines else "No specific knowledge provided."
 
 async def ask_character(agent, question: str, memory):
-    # === Build prompt with system prompt and memory ===
+    # === Build prompt with system prompt and LIMITED memory (only Detective <-> this character) ===
     system_prompt = agent.system_prompt
+    prior_dialogue = memory.get_dialogue_for(agent.name)
     memory_text = "\n".join(
-        f"{entry['speaker']}: {entry['content']}" for entry in memory.get()
+        f"{entry['speaker']}: {entry['content']}" for entry in prior_dialogue
     )
     off_topic_triggers = [
         "joke",
@@ -34,8 +65,18 @@ async def ask_character(agent, question: str, memory):
         if is_off_topic
         else ""
     )
+    # === Load per-character knowledge and build constraints ===
+    knowledge = load_knowledge()
+    knowledge_text = build_knowledge_text(agent.name, knowledge)
     prompt = (
-        f"{system_prompt}\n\n{convo_guidelines}\n{off_topic_preface}\n\nPrevious conversation:\n{memory_text}\n\n"
+        f"{system_prompt}\n\n{convo_guidelines}\n{off_topic_preface}\n\n"
+        f"You must answer ONLY using:\n"
+        f"1) Your own background/perspective, and\n"
+        f"2) The knowledge provided below about other witnesses.\n"
+        f"Do NOT assume knowledge of what other witnesses told the detective unless it is explicitly in your knowledge. "
+        f"Do NOT invent facts.\n\n"
+        f"Your provided knowledge:\n{knowledge_text}\n\n"
+        f"Previous conversation with the Detective (for continuity only):\n{memory_text}\n\n"
         f'Now reply ONLY as {agent.name} to this question: "{question}"'
     )
 

@@ -1,0 +1,70 @@
+{
+  "Mrs. Bellamy": {
+    "background": [
+      "Retired schoolteacher; fussy, observant, and gossipy.",
+      "Baking a pie at 9am; claims she couldn't leave the oven."
+    ],
+    "about": {
+      "Mr. Holloway": [
+        "Keeps a strict gardening routine and notes neighborhood events in a notebook."
+      ],
+      "Tommy the Janitor": [
+        "Often seen mopping the ground floor around mornings; keeps to himself."
+      ],
+      "Dr. Adrian Blackwood": [
+        "Respected surgeon; maintains a polished public image."
+      ]
+    }
+  },
+  "Mr. Holloway": {
+    "background": [
+      "Retired civil servant; values routine and order.",
+      "Claims he was pruning hydrangeas from 8:30 to 9:30."
+    ],
+    "about": {
+      "Mrs. Bellamy": [
+        "Observant neighbor who tends to gossip about minor details."
+      ],
+      "Tommy the Janitor": [
+        "Often around the building hallways; not very talkative."
+      ],
+      "Dr. Adrian Blackwood": [
+        "Professional demeanor; polite in public."
+      ]
+    }
+  },
+  "Tommy the Janitor": {
+    "background": [
+      "Building janitor; gruff but observant.",
+      "Was mopping ground floor hallway around 9am."
+    ],
+    "about": {
+      "Mrs. Bellamy": [
+        "Always peeking through the curtains; knows what's going on."
+      ],
+      "Mr. Holloway": [
+        "Routine-driven; keeps records."
+      ],
+      "Dr. Adrian Blackwood": [
+        "Keeps his head down; few words outside the hospital."
+      ]
+    }
+  },
+  "Dr. Adrian Blackwood": {
+    "background": [
+      "Respected surgeon; calm exterior; protective of reputation."
+    ],
+    "about": {
+      "Mrs. Bellamy": [
+        "Long-time neighbor of the victim; tends to gossip."
+      ],
+      "Mr. Holloway": [
+        "Dislikes disruptions; watches the street closely."
+      ],
+      "Tommy the Janitor": [
+        "Present in common areas; hears more than people assume."
+      ]
+    }
+  }
+}
+
