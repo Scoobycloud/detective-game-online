@@ -824,23 +824,13 @@ def write_knowledge(data: dict) -> bool:
         return False
 
 def is_authorized(request: Request) -> bool:
-    """
-    Accept either:
-    - Static ADMIN_TOKEN via X-Admin-Token or Authorization: Bearer <token>
-    - Firebase Bearer token for a user flagged as admin in DB
-    """
-    # Static admin token
-    static = os.getenv("ADMIN_TOKEN") or ""
-    hdr = request.headers.get("x-admin-token") or request.headers.get("authorization", "")
+    """Authorize only Firebase admin users (Bearer token)."""
+    hdr = request.headers.get("authorization", "") or request.headers.get("Authorization", "")
+    bearer = ""
     if hdr.lower().startswith("bearer "):
         bearer = hdr.split(" ", 1)[1].strip()
-    else:
-        bearer = hdr.strip()
-    if static and bearer == static:
-        return True
-    # Firebase admin via bearer
     try:
-        if fb_auth and bearer and hdr.lower().startswith("bearer "):
+        if fb_auth and bearer:
             decoded = fb_auth.verify_id_token(bearer)
             uid = decoded.get("uid")
             if uid and "db_get_user_admin" in globals() and db_get_user_admin:
