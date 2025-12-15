@@ -846,11 +846,17 @@ async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
             duration = STAGE_DURATIONS.get(stage)
             if not duration:
                 break  # closed or no timer
-            # respect pause/remaining if present
+            # set/refresh stage meta at stage start
             room = ROOMS.get(room_code)
             if not room:
                 break
-            end_ts = room.get("stage_end") or (time.time() + duration)
+            room["stage"] = stage
+            room["stage_paused"] = False
+            room["stage_remaining"] = None
+            room["stage_started"] = time.time()
+            room["stage_end"] = room["stage_started"] + duration
+
+            end_ts = room["stage_end"]
             while True:
                 room = ROOMS.get(room_code)
                 if not room:
@@ -868,13 +874,15 @@ async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
         return
 
 
-def start_stage_timers(room_code: str, initial_stage: str = "investigation"):
+def start_stage_timers(room_code: str, initial_stage: str = "investigation", remaining: Optional[float] = None):
     prev = STAGE_TASKS.get(room_code)
     if prev and not prev.done():
         prev.cancel()
     room = ROOMS.get(room_code)
     if room:
         dur = STAGE_DURATIONS.get(initial_stage)
+        if remaining is not None:
+            dur = remaining
         if dur:
             room["stage"] = initial_stage
             room["stage_started"] = time.time()
@@ -898,7 +906,7 @@ def pause_stage(room_code: str, pause: bool):
         room["stage_started"] = time.time()
         room["stage_end"] = room["stage_started"] + remaining
         room["stage_remaining"] = None
-        start_stage_timers(room_code, room.get("stage", "investigation"))
+        start_stage_timers(room_code, room.get("stage", "investigation"), remaining=remaining)
 
 def stage_meta(room_code: str) -> Dict[str, Any]:
     room = ROOMS.get(room_code)
