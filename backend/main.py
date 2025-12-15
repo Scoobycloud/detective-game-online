@@ -801,6 +801,41 @@ WAITING: Dict[str, set[str]] = {
     "murderer": set(),
 }
 
+# Auto stage flow and timers (seconds)
+STAGE_FLOW = ["investigation", "interrogation", "accusation", "closed"]
+STAGE_DURATIONS = {
+    "investigation": 10 * 60,   # 10 mins
+    "interrogation": 15 * 60,   # 15 mins
+    "accusation": 5 * 60,       # 5 mins
+}
+STAGE_TASKS: Dict[str, asyncio.Task] = {}
+
+
+async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
+    try:
+        if start_stage not in STAGE_FLOW:
+            start_stage = "investigation"
+        start_idx = STAGE_FLOW.index(start_stage)
+        for stage in STAGE_FLOW[start_idx:]:
+            try:
+                db_update_case_status(room_code, stage)
+            except Exception as e:
+                log.info(f"Auto-stage update failed for {room_code} -> {stage}: {e}")
+            duration = STAGE_DURATIONS.get(stage)
+            if not duration:
+                break  # closed or no timer
+            await asyncio.sleep(duration)
+    except asyncio.CancelledError:
+        return
+
+
+def start_stage_timers(room_code: str, initial_stage: str = "investigation"):
+    prev = STAGE_TASKS.get(room_code)
+    if prev and not prev.done():
+        prev.cancel()
+    task = asyncio.create_task(_run_stage_timer(room_code, initial_stage))
+    STAGE_TASKS[room_code] = task
+
 
 def find_character(name: str):
     return next((c for c in characters if c.name == name), None)
@@ -907,7 +942,7 @@ async def create_room(sid, data):
             "location": "Whitestone Manor - Study",
             "time": "~9:00 PM",
         }
-        db_upsert_case(code, status="open", seed=seed, summary=summary)
+        db_upsert_case(code, status="investigation", seed=seed, summary=summary)
         # seed notable characters (names here align with default roster; roles illustrative)
         db_upsert_case_character(
             code,
@@ -1036,6 +1071,7 @@ async def create_room(sid, data):
     except Exception as e:
         log.info(f"Case framework generation failed: {e}")
     log.info(f"ROOM CREATED {code}")
+    start_stage_timers(code, "investigation")
     await sio.emit("room_created", {"room": code}, room=sid)
 
 
