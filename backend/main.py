@@ -169,7 +169,11 @@ async def get_room_characters(code: str):
 async def auth_me(request: Request):
     # Expect optional Firebase ID token via Authorization: Bearer <token>
     try:
-        auth_header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+        auth_header = (
+            request.headers.get("authorization")
+            or request.headers.get("Authorization")
+            or ""
+        )
         token = ""
         if auth_header.lower().startswith("bearer "):
             token = auth_header.split(" ", 1)[1].strip()
@@ -185,7 +189,12 @@ async def auth_me(request: Request):
                 is_admin = bool(flag)
         except Exception:
             pass
-        return {"authenticated": True, "user_id": user_id, "email": email, "is_admin": is_admin}
+        return {
+            "authenticated": True,
+            "user_id": user_id,
+            "email": email,
+            "is_admin": is_admin,
+        }
     except Exception as e:
         return {"authenticated": False, "error": str(e)}
 
@@ -619,11 +628,13 @@ async def get_room_clues(code: str):
         return {"error": "Room not found"}
     return room["memory"].get_clues()
 
+
 @app.get("/admin/knowledge")
 async def admin_get_knowledge(request: Request):
     if not is_authorized(request):
         raise HTTPException(status_code=401, detail="unauthorized")
     return read_knowledge()
+
 
 @app.put("/admin/knowledge")
 async def admin_put_knowledge(request: Request):
@@ -826,9 +837,9 @@ WAITING: Dict[str, set[str]] = {
 # Auto stage flow and timers (seconds)
 STAGE_FLOW = ["investigation", "interrogation", "accusation", "closed"]
 STAGE_DURATIONS = {
-    "investigation": 10 * 60,   # 10 mins
-    "interrogation": 15 * 60,   # 15 mins
-    "accusation": 5 * 60,       # 5 mins
+    "investigation": 2 * 60,  # 10 mins
+    "interrogation": 2 * 60,  # 15 mins
+    "accusation": 5 * 60,  # 5 mins
 }
 STAGE_TASKS: Dict[str, asyncio.Task] = {}
 
@@ -874,7 +885,11 @@ async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
         return
 
 
-def start_stage_timers(room_code: str, initial_stage: str = "investigation", remaining: Optional[float] = None):
+def start_stage_timers(
+    room_code: str,
+    initial_stage: str = "investigation",
+    remaining: Optional[float] = None,
+):
     prev = STAGE_TASKS.get(room_code)
     if prev and not prev.done():
         prev.cancel()
@@ -892,6 +907,7 @@ def start_stage_timers(room_code: str, initial_stage: str = "investigation", rem
     task = asyncio.create_task(_run_stage_timer(room_code, initial_stage))
     STAGE_TASKS[room_code] = task
 
+
 def pause_stage(room_code: str, pause: bool):
     room = ROOMS.get(room_code)
     if not room:
@@ -906,7 +922,10 @@ def pause_stage(room_code: str, pause: bool):
         room["stage_started"] = time.time()
         room["stage_end"] = room["stage_started"] + remaining
         room["stage_remaining"] = None
-        start_stage_timers(room_code, room.get("stage", "investigation"), remaining=remaining)
+        start_stage_timers(
+            room_code, room.get("stage", "investigation"), remaining=remaining
+        )
+
 
 def stage_meta(room_code: str) -> Dict[str, Any]:
     room = ROOMS.get(room_code)
@@ -924,8 +943,10 @@ def stage_meta(room_code: str) -> Dict[str, Any]:
 def find_character(name: str):
     return next((c for c in characters if c.name == name), None)
 
+
 BASE_DIR = Path(__file__).resolve().parent
 KNOWLEDGE_PATH = BASE_DIR / "state" / "knowledge.json"
+
 
 def read_knowledge() -> dict:
     try:
@@ -935,6 +956,7 @@ def read_knowledge() -> dict:
         log.info(f"Failed reading knowledge: {e}")
     return {}
 
+
 def write_knowledge(data: dict) -> bool:
     try:
         KNOWLEDGE_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
@@ -943,9 +965,12 @@ def write_knowledge(data: dict) -> bool:
         log.info(f"Failed writing knowledge: {e}")
         return False
 
+
 def is_authorized(request: Request) -> bool:
     """Authorize only Firebase admin users (Bearer token)."""
-    hdr = request.headers.get("authorization", "") or request.headers.get("Authorization", "")
+    hdr = request.headers.get("authorization", "") or request.headers.get(
+        "Authorization", ""
+    )
     bearer = ""
     if hdr.lower().startswith("bearer "):
         bearer = hdr.split(" ", 1)[1].strip()
