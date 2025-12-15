@@ -1244,6 +1244,15 @@ async def join_role(sid, data):
                 }
                 hydrated = True
                 print(f"Hydrated room {room_code} from DB")
+                # Restart stage timers based on stored case status (default investigation)
+                try:
+                    ok_fw, framework = db_get_case_framework(room_code)
+                    status = "investigation"
+                    if ok_fw and framework and isinstance(framework.get("case"), dict):
+                        status = framework["case"].get("status", "investigation")
+                    start_stage_timers(room_code, status)
+                except Exception as e:
+                    print(f"Failed to restart timers for hydrated room {room_code}: {e}")
         except Exception as e:
             print("Room hydration failed:", e)
         if not hydrated:
