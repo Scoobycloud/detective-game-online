@@ -1018,7 +1018,7 @@ async def create_room(sid, data):
             "location": "Whitestone Manor - Study",
             "time": "~9:00 PM",
         }
-    db_upsert_case(code, status="investigation", seed=seed, summary=summary)
+        db_upsert_case(code, status="investigation", seed=seed, summary=summary)
         # seed notable characters (names here align with default roster; roles illustrative)
         db_upsert_case_character(
             code,
