@@ -837,11 +837,38 @@ WAITING: Dict[str, set[str]] = {
 # Auto stage flow and timers (seconds)
 STAGE_FLOW = ["investigation", "interrogation", "accusation", "closed"]
 STAGE_DURATIONS = {
-    "investigation": 2 * 60,  # 10 mins
-    "interrogation": 2 * 60,  # 15 mins
+    "investigation": 10 * 60,  # 10 mins
+    "interrogation": 15 * 60,  # 15 mins
     "accusation": 5 * 60,  # 5 mins
 }
 STAGE_TASKS: Dict[str, asyncio.Task] = {}
+
+
+async def emit_stage_update(room_code: str):
+    """Push current stage state to all clients in the room."""
+    room = ROOMS.get(room_code)
+    if not room:
+        return
+    paused = bool(room.get("stage_paused"))
+    remaining = None
+    if paused:
+        remaining = int(room.get("stage_remaining") or 0)
+    else:
+        end = room.get("stage_end")
+        if end:
+            remaining = max(0, int(end - time.time()))
+    try:
+        await sio.emit(
+            "stage_update",
+            {
+                "stage": room.get("stage", "investigation"),
+                "paused": paused,
+                "remaining_seconds": remaining,
+            },
+            room=room_code,
+        )
+    except Exception as e:
+        log.info(f"stage_update emit failed for {room_code}: {e}")
 
 
 async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
@@ -866,6 +893,8 @@ async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
             room["stage_remaining"] = None
             room["stage_started"] = time.time()
             room["stage_end"] = room["stage_started"] + duration
+
+            await emit_stage_update(room_code)
 
             end_ts = room["stage_end"]
             while True:
@@ -906,6 +935,7 @@ def start_stage_timers(
             room["stage_remaining"] = None
     task = asyncio.create_task(_run_stage_timer(room_code, initial_stage))
     STAGE_TASKS[room_code] = task
+    asyncio.create_task(emit_stage_update(room_code))
 
 
 def pause_stage(room_code: str, pause: bool):
@@ -916,6 +946,7 @@ def pause_stage(room_code: str, pause: bool):
         remaining = max(0, (room.get("stage_end") or time.time()) - time.time())
         room["stage_paused"] = True
         room["stage_remaining"] = remaining
+        asyncio.create_task(emit_stage_update(room_code))
     if not pause and room.get("stage_paused"):
         remaining = room.get("stage_remaining") or 0
         room["stage_paused"] = False
@@ -925,6 +956,7 @@ def pause_stage(room_code: str, pause: bool):
         start_stage_timers(
             room_code, room.get("stage", "investigation"), remaining=remaining
         )
+        asyncio.create_task(emit_stage_update(room_code))
 
 
 def stage_meta(room_code: str) -> Dict[str, Any]:
