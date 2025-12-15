@@ -28,6 +28,7 @@ import random
 import string
 from typing import Dict, Any, Optional
 import inspect
+import time
 
 # === Firebase Admin (optional) ===
 try:
@@ -126,7 +127,22 @@ async def get_room_case(code: str):
         if not ok:
             raise HTTPException(status_code=500, detail="Database error")
         # framework may be None if no case yet
-        return {"success": True, "case": framework.get("case") if framework else None}
+        meta = stage_meta(code)
+        # compute remaining seconds best-effort
+        remaining = None
+        if meta.get("stage_end") and not meta.get("stage_paused"):
+            remaining = max(0, int(meta["stage_end"] - time.time()))
+        elif meta.get("stage_paused") and meta.get("stage_remaining") is not None:
+            remaining = int(meta["stage_remaining"])
+        return {
+            "success": True,
+            "case": framework.get("case") if framework else None,
+            "stage": {
+                "status": meta.get("stage"),
+                "paused": meta.get("stage_paused"),
+                "remaining_seconds": remaining,
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -181,16 +197,22 @@ async def set_case_status_http(code: str, request: Request):
     except Exception:
         body = {}
     status = (body or {}).get("status")
+    pause = (body or {}).get("pause")
+    if pause is not None:
+        pause_stage(code, bool(pause))
+        return {"ok": True, "paused": bool(pause)}
     if not isinstance(status, str) or not status.strip():
         raise HTTPException(status_code=400, detail="Missing status")
     status = status.strip().lower()
-    allowed = {"open", "investigation", "interrogation", "accusation", "closed"}
+    allowed = {"investigation", "interrogation", "accusation", "closed"}
     if status not in allowed:
         raise HTTPException(status_code=400, detail="Invalid status")
     try:
         ok, err = db_update_case_status(code, status)
         if not ok:
             raise HTTPException(status_code=500, detail=err or "Update failed")
+        # restart timers from this stage
+        start_stage_timers(code, status)
         return {"ok": True, "status": status}
     except HTTPException:
         raise
@@ -824,7 +846,24 @@ async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
             duration = STAGE_DURATIONS.get(stage)
             if not duration:
                 break  # closed or no timer
-            await asyncio.sleep(duration)
+            # respect pause/remaining if present
+            room = ROOMS.get(room_code)
+            if not room:
+                break
+            end_ts = room.get("stage_end") or (time.time() + duration)
+            while True:
+                room = ROOMS.get(room_code)
+                if not room:
+                    break
+                if room.get("stage_paused"):
+                    await asyncio.sleep(1)
+                    end_ts = room.get("stage_end", end_ts)
+                    continue
+                now = time.time()
+                if now >= end_ts:
+                    break
+                await asyncio.sleep(1)
+            # advance to next stage
     except asyncio.CancelledError:
         return
 
@@ -833,8 +872,45 @@ def start_stage_timers(room_code: str, initial_stage: str = "investigation"):
     prev = STAGE_TASKS.get(room_code)
     if prev and not prev.done():
         prev.cancel()
+    room = ROOMS.get(room_code)
+    if room:
+        dur = STAGE_DURATIONS.get(initial_stage)
+        if dur:
+            room["stage"] = initial_stage
+            room["stage_started"] = time.time()
+            room["stage_end"] = room["stage_started"] + dur
+            room["stage_paused"] = False
+            room["stage_remaining"] = None
     task = asyncio.create_task(_run_stage_timer(room_code, initial_stage))
     STAGE_TASKS[room_code] = task
+
+def pause_stage(room_code: str, pause: bool):
+    room = ROOMS.get(room_code)
+    if not room:
+        return
+    if pause and not room.get("stage_paused"):
+        remaining = max(0, (room.get("stage_end") or time.time()) - time.time())
+        room["stage_paused"] = True
+        room["stage_remaining"] = remaining
+    if not pause and room.get("stage_paused"):
+        remaining = room.get("stage_remaining") or 0
+        room["stage_paused"] = False
+        room["stage_started"] = time.time()
+        room["stage_end"] = room["stage_started"] + remaining
+        room["stage_remaining"] = None
+        start_stage_timers(room_code, room.get("stage", "investigation"))
+
+def stage_meta(room_code: str) -> Dict[str, Any]:
+    room = ROOMS.get(room_code)
+    if not room:
+        return {}
+    return {
+        "stage": room.get("stage", "investigation"),
+        "stage_paused": bool(room.get("stage_paused")),
+        "stage_end": room.get("stage_end"),
+        "stage_started": room.get("stage_started"),
+        "stage_remaining": room.get("stage_remaining"),
+    }
 
 
 def find_character(name: str):
@@ -942,7 +1018,7 @@ async def create_room(sid, data):
             "location": "Whitestone Manor - Study",
             "time": "~9:00 PM",
         }
-        db_upsert_case(code, status="investigation", seed=seed, summary=summary)
+    db_upsert_case(code, status="investigation", seed=seed, summary=summary)
         # seed notable characters (names here align with default roster; roles illustrative)
         db_upsert_case_character(
             code,
