@@ -141,6 +141,7 @@ async def get_room_case(code: str):
                 "status": meta.get("stage"),
                 "paused": meta.get("stage_paused"),
                 "remaining_seconds": remaining,
+                "durations": meta.get("durations"),
             },
         }
     except HTTPException:
@@ -228,6 +229,94 @@ async def set_case_status_http(code: str, request: Request):
     except Exception as e:
         log.error(f"POST /rooms/{code}/status failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to update status")
+
+
+@app.post("/rooms/{code}/stage_config")
+async def set_stage_config_http(code: str, request: Request):
+    """Update stage durations (seconds) per room; restarts timer from current stage."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid body")
+
+    def parse_duration(key: str) -> Optional[int]:
+        val = body.get(key)
+        if val is None:
+            return None
+        try:
+            num = int(float(val))
+            if num <= 0:
+                raise ValueError()
+            return num
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid duration for {key}")
+
+    updates: Dict[str, int] = {}
+    for k in ("investigation", "interrogation", "accusation"):
+        v = parse_duration(k)
+        if v is not None:
+            updates[k] = v
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No durations provided")
+
+    room = ROOMS.get(code)
+    if not room:
+        hydrated = False
+        try:
+            if (
+                "db_room_exists" in globals()
+                and db_room_exists
+                and db_room_exists(code)
+            ):
+                ROOMS[code] = {
+                    "detective_sid": None,
+                    "murderer_sid": None,
+                    "human_character": None,
+                    "memory": Memory(),
+                    "stage_durations": dict(STAGE_DURATIONS),
+                }
+                hydrated = True
+                try:
+                    ok_fw, framework = db_get_case_framework(code)
+                    status = "investigation"
+                    if ok_fw and framework and isinstance(framework.get("case"), dict):
+                        status = framework["case"].get("status", "investigation")
+                    start_stage_timers(code, status)
+                except Exception as e:  # pragma: no cover - defensive
+                    print(f"Failed to restart timers for hydrated room {code}: {e}")
+        except Exception as e:  # pragma: no cover - defensive
+            print("Room hydration failed:", e)
+        if not hydrated:
+            raise HTTPException(status_code=404, detail="Room not found")
+        room = ROOMS.get(code)
+
+    room["stage_durations"] = {**get_stage_durations(code), **updates}
+
+    current_stage = room.get("stage", "investigation")
+    durations = get_stage_durations(code)
+    cur_dur = durations.get(current_stage) or 0
+
+    if room.get("stage_paused"):
+        remaining = room.get("stage_remaining") or cur_dur
+        remaining = min(max(0, int(remaining)), cur_dur or int(remaining))
+    else:
+        start_ts = room.get("stage_started") or time.time()
+        elapsed = max(0, time.time() - start_ts)
+        remaining = max(0, int((cur_dur or 0) - elapsed))
+
+    start_stage_timers(code, current_stage, remaining=remaining or None)
+    asyncio.create_task(emit_stage_update(code))
+
+    return {
+        "ok": True,
+        "durations": durations,
+        "stage": current_stage,
+        "remaining_seconds": remaining,
+    }
 
 
 @app.post("/rooms/{code}/summary")
@@ -844,6 +933,11 @@ STAGE_DURATIONS = {
 STAGE_TASKS: Dict[str, asyncio.Task] = {}
 
 
+def get_stage_durations(room_code: str) -> Dict[str, int]:
+    room = ROOMS.get(room_code) or {}
+    return dict(room.get("stage_durations") or STAGE_DURATIONS)
+
+
 async def emit_stage_update(room_code: str):
     """Push current stage state to all clients in the room."""
     room = ROOMS.get(room_code)
@@ -857,6 +951,7 @@ async def emit_stage_update(room_code: str):
         end = room.get("stage_end")
         if end:
             remaining = max(0, int(end - time.time()))
+    durations = get_stage_durations(room_code)
     try:
         await sio.emit(
             "stage_update",
@@ -864,6 +959,7 @@ async def emit_stage_update(room_code: str):
                 "stage": room.get("stage", "investigation"),
                 "paused": paused,
                 "remaining_seconds": remaining,
+                "durations": durations,
             },
             room=room_code,
         )
@@ -881,7 +977,7 @@ async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
                 db_update_case_status(room_code, stage)
             except Exception as e:
                 log.info(f"Auto-stage update failed for {room_code} -> {stage}: {e}")
-            duration = STAGE_DURATIONS.get(stage)
+            duration = get_stage_durations(room_code).get(stage)
             if not duration:
                 break  # closed or no timer
             # set/refresh stage meta at stage start
@@ -924,7 +1020,7 @@ def start_stage_timers(
         prev.cancel()
     room = ROOMS.get(room_code)
     if room:
-        dur = STAGE_DURATIONS.get(initial_stage)
+        dur = get_stage_durations(room_code).get(initial_stage)
         if remaining is not None:
             dur = remaining
         if dur:
@@ -963,12 +1059,14 @@ def stage_meta(room_code: str) -> Dict[str, Any]:
     room = ROOMS.get(room_code)
     if not room:
         return {}
+    durations = get_stage_durations(room_code)
     return {
         "stage": room.get("stage", "investigation"),
         "stage_paused": bool(room.get("stage_paused")),
         "stage_end": room.get("stage_end"),
         "stage_started": room.get("stage_started"),
         "stage_remaining": room.get("stage_remaining"),
+        "durations": durations,
     }
 
 
@@ -1064,6 +1162,7 @@ async def create_room(sid, data):
         "murderer_sid": None,
         "human_character": None,
         "memory": Memory(),
+        "stage_durations": dict(STAGE_DURATIONS),
     }
     # Persist room creation (best-effort)
     try:
@@ -1241,6 +1340,7 @@ async def join_role(sid, data):
                     "murderer_sid": None,
                     "human_character": None,
                     "memory": Memory(),
+                    "stage_durations": dict(STAGE_DURATIONS),
                 }
                 hydrated = True
                 print(f"Hydrated room {room_code} from DB")
@@ -1252,7 +1352,9 @@ async def join_role(sid, data):
                         status = framework["case"].get("status", "investigation")
                     start_stage_timers(room_code, status)
                 except Exception as e:
-                    print(f"Failed to restart timers for hydrated room {room_code}: {e}")
+                    print(
+                        f"Failed to restart timers for hydrated room {room_code}: {e}"
+                    )
         except Exception as e:
             print("Room hydration failed:", e)
         if not hydrated:
