@@ -967,17 +967,23 @@ async def emit_stage_update(room_code: str):
         log.info(f"stage_update emit failed for {room_code}: {e}")
 
 
-async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
+async def _run_stage_timer(
+    room_code: str, start_stage: str = "investigation", initial_remaining: Optional[float] = None
+):
     try:
         if start_stage not in STAGE_FLOW:
             start_stage = "investigation"
         start_idx = STAGE_FLOW.index(start_stage)
+        first_stage = True
         for stage in STAGE_FLOW[start_idx:]:
             try:
                 db_update_case_status(room_code, stage)
             except Exception as e:
                 log.info(f"Auto-stage update failed for {room_code} -> {stage}: {e}")
             duration = get_stage_durations(room_code).get(stage)
+            if first_stage and initial_remaining is not None:
+                duration = initial_remaining
+            first_stage = False
             if not duration:
                 break  # closed or no timer
             # set/refresh stage meta at stage start
@@ -1006,6 +1012,19 @@ async def _run_stage_timer(room_code: str, start_stage: str = "investigation"):
                     break
                 await asyncio.sleep(1)
             # advance to next stage
+        # mark closed at the end of flow
+        room = ROOMS.get(room_code)
+        if room:
+            room["stage"] = "closed"
+            room["stage_paused"] = False
+            room["stage_remaining"] = 0
+            room["stage_started"] = None
+            room["stage_end"] = None
+            try:
+                db_update_case_status(room_code, "closed")
+            except Exception:
+                pass
+            await emit_stage_update(room_code)
     except asyncio.CancelledError:
         return
 
@@ -1029,7 +1048,9 @@ def start_stage_timers(
             room["stage_end"] = room["stage_started"] + dur
             room["stage_paused"] = False
             room["stage_remaining"] = None
-    task = asyncio.create_task(_run_stage_timer(room_code, initial_stage))
+    task = asyncio.create_task(
+        _run_stage_timer(room_code, initial_stage, initial_remaining=remaining)
+    )
     STAGE_TASKS[room_code] = task
     asyncio.create_task(emit_stage_update(room_code))
 
