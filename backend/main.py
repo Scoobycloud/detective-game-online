@@ -234,6 +234,26 @@ async def set_case_status_http(code: str, request: Request):
 @app.post("/rooms/{code}/stage_config")
 async def set_stage_config_http(code: str, request: Request):
     """Update stage durations (seconds) per room; restarts timer from current stage."""
+    # Admin gate: require Firebase auth + admin flag in DB
+    auth_header = request.headers.get("authorization") or request.headers.get(
+        "Authorization"
+    )
+    token = ""
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    if not token or not fb_auth:
+        raise HTTPException(status_code=401, detail="Admin auth required")
+    try:
+        decoded = fb_auth.verify_id_token(token)
+        user_id = decoded.get("uid")
+        ok_admin, flag = db_get_user_admin(user_id) if user_id else (False, None)
+        if not (ok_admin and flag):
+            raise HTTPException(status_code=403, detail="Admin required")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     try:
         body = await request.json()
     except Exception:
@@ -968,7 +988,9 @@ async def emit_stage_update(room_code: str):
 
 
 async def _run_stage_timer(
-    room_code: str, start_stage: str = "investigation", initial_remaining: Optional[float] = None
+    room_code: str,
+    start_stage: str = "investigation",
+    initial_remaining: Optional[float] = None,
 ):
     try:
         if start_stage not in STAGE_FLOW:
