@@ -1229,7 +1229,7 @@ async def create_room(sid, data):
         # seed notable characters (names here align with default roster; roles illustrative)
         db_upsert_case_character(
             code,
-            name="Mrs. Bellamy",
+            name="Ms. Banana",
             role="witness",
             personality={"traits": ["poised", "observant"], "honesty": "honest"},
             knowledge_scope={
@@ -1325,7 +1325,7 @@ async def create_room(sid, data):
         # seed basic alibis
         db_insert_alibi(
             code,
-            character="Mrs. Bellamy",
+            character="Ms. Banana",
             timeframe="20:45–21:15",
             account="Preparing tea in the sunroom; saw no one enter the study",
             credibility_score=0.6,
@@ -1511,7 +1511,7 @@ async def set_human_character(sid, data):
 async def ask(sid, data):
     """
     Detective asks a question (multiplayer path).
-    data: {"character": "Mrs. Bellamy", "question": "Where were you?"}
+    data: {"character": "Ms. Banana", "question": "Where were you?"}
     """
     session = await maybe_await(sio.get_session(sid))
     room_code = session.get("room")

@@ -1,7 +1,7 @@
 def generate_case():
     return [
         {
-            "name": "Mrs. Bellamy",
+            "name": "Ms. Banana",
             "role": "witness",
             "memory": "She saw a figure in a trenchcoat at 9PM.",
             "secret": "She was having an affair with Dr. Lang.",
