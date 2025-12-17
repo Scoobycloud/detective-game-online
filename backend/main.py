@@ -823,6 +823,57 @@ async def list_rooms_http():
     return []
 
 
+@app.delete("/rooms/{code}")
+async def delete_room_http(code: str, request: Request):
+    """Delete a room and all associated data. Admin only."""
+    # Verify admin auth
+    try:
+        auth_header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+        token = ""
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+        if not token or not fb_auth:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        decoded = fb_auth.verify_id_token(token)
+        user_id = decoded.get("uid")
+        ok, is_admin = db_get_user_admin(user_id)
+        if not ok or not is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {e}")
+
+    # Delete from database
+    try:
+        from db import delete_room as _delete_room
+    except Exception:
+        _delete_room = None
+    
+    if not _delete_room:
+        raise HTTPException(status_code=500, detail="Delete function not available")
+    
+    try:
+        # Remove from in-memory ROOMS if present
+        if code in ROOMS:
+            del ROOMS[code]
+        # Cancel any stage timers
+        if code in STAGE_TASKS:
+            task = STAGE_TASKS.pop(code)
+            if not task.done():
+                task.cancel()
+        # Delete from database
+        ok, info = _delete_room(code)
+        if not ok:
+            raise HTTPException(status_code=500, detail=info or "Delete failed")
+        return {"ok": True, "deleted": code, "info": info}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"DELETE /rooms/{code} failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/rooms/name_exists")
 async def room_name_exists_http(name: str):
     try:

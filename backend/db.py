@@ -45,6 +45,47 @@ def create_room(code: str) -> Tuple[bool, Optional[str]]:
         return False, str(e)
 
 
+def delete_room(code: str) -> Tuple[bool, Optional[str]]:
+    """Delete a room and all associated data from all tables."""
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        # Delete from all related tables (order matters for foreign keys)
+        tables = [
+            "transcript",
+            "clues", 
+            "evidence",
+            "timeline_events",
+            "relationships",
+            "alibis",
+            "case_characters",
+            "cases",
+            "room_members",
+            "rooms",
+        ]
+        deleted_counts = {}
+        for table in tables:
+            try:
+                res = supabase.table(table).delete().eq("room_code", code).execute()
+                data = getattr(res, "data", None)
+                deleted_counts[table] = len(data) if data else 0
+            except Exception as e:
+                # Some tables might use 'code' instead of 'room_code'
+                if table == "rooms":
+                    try:
+                        res = supabase.table(table).delete().eq("code", code).execute()
+                        data = getattr(res, "data", None)
+                        deleted_counts[table] = len(data) if data else 0
+                    except Exception as e2:
+                        deleted_counts[table] = f"error: {e2}"
+                else:
+                    deleted_counts[table] = f"error: {e}"
+        return True, str(deleted_counts)
+    except Exception as e:
+        print("DB delete_room error:", e)
+        return False, str(e)
+
+
 def update_room_status(code: str, status: str) -> Tuple[bool, Optional[str]]:
     if not supabase:
         return False, "supabase_not_configured"
