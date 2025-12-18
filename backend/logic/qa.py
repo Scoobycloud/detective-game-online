@@ -79,7 +79,9 @@ async def ask_character(agent, question: str, memory):
         f"Do NOT invent facts.\n\n"
         f"Your provided knowledge:\n{knowledge_text}\n\n"
         f"Previous conversation with the Detective (for continuity only):\n{memory_text}\n\n"
-        f'Now reply ONLY as {agent.name} to this question: "{question}"'
+        f"The detective says: \"{question}\"\n\n"
+        f"Respond in first-person as {agent.name}. Use 'I' and 'my', never '{agent.name}' or third-person. "
+        f"If the detective's statement is vague, react naturally (curiosity, confusion, defensiveness) but stay in character."
     )
 
     # === Get character's response ===
