@@ -34,69 +34,59 @@ def build_knowledge_text(character_name: str, knowledge: dict) -> str:
     return "\n".join(lines) if lines else "No specific knowledge provided."
 
 async def ask_character(agent, question: str, memory):
-    # === Build prompt with system prompt and LIMITED memory (only Detective <-> this character) ===
-    system_prompt = agent.system_prompt
-    prior_dialogue = memory.get_dialogue_for(agent.name)
-    memory_text = "\n".join(
-        f"{entry['speaker']}: {entry['content']}" for entry in prior_dialogue
-    )
-    off_topic_triggers = [
-        "joke",
-        "funny",
-        "make me laugh",
-        "tell me a joke",
-        "humour",
-        "humor",
-        "sing",
-        "riddle",
-    ]
-    is_off_topic = any(t in question.lower() for t in off_topic_triggers)
-    convo_guidelines = (
-        "Guidelines: Be natural, concise, and context-aware. Answer only what was asked. "
-        "If the detective's input is unclear, vague, or just a reaction (like 'hmmm', 'interesting', 'I see'), "
-        "respond naturally in character - perhaps with curiosity, defensiveness, or a follow-up question. "
-        "If the input is off-topic (e.g., a joke request), politely deflect and steer back to the investigation. "
-        "Do not repeat the same alibi or stock lines verbatim unless directly relevant. "
-        "CRITICAL: You ARE this character. ALWAYS speak in first-person ('I', 'me', 'my'). "
-        "NEVER analyze yourself in third-person. NEVER describe what the character might do or think - just BE them. "
-        "Stay consistent with prior statements and the case context. Do not include any detective dialogue."
-    )
-    off_topic_preface = (
-        "The detective's prompt appears off-topic or frivolous; provide a brief, polite deflection and steer back to relevant case details. "
-        "If appropriate, ask a short clarifying question tied to the case."
-        if is_off_topic
-        else ""
-    )
-    # === Load per-character knowledge and build constraints ===
+    # === Build system prompt with character identity ===
     knowledge = load_knowledge()
     knowledge_text = build_knowledge_text(agent.name, knowledge)
-    prompt = (
-        f"{system_prompt}\n\n{convo_guidelines}\n{off_topic_preface}\n\n"
-        f"You must answer ONLY using:\n"
-        f"1) Your own background/perspective, and\n"
-        f"2) The knowledge provided below about other witnesses.\n"
-        f"Do NOT assume knowledge of what other witnesses told the detective unless it is explicitly in your knowledge. "
-        f"Do NOT invent facts.\n\n"
-        f"Your provided knowledge:\n{knowledge_text}\n\n"
-        f"Previous conversation with the Detective (for continuity only):\n{memory_text}\n\n"
-        f"The detective says: \"{question}\"\n\n"
-        f"Respond in first-person as {agent.name}. Use 'I' and 'my', never '{agent.name}' or third-person. "
-        f"If the detective's statement is vague, react naturally (curiosity, confusion, defensiveness) but stay in character."
+    
+    system_msg = (
+        f"{agent.system_prompt}\n\n"
+        f"RULES:\n"
+        f"- You ARE {agent.name}. Speak ONLY in first-person (I, me, my).\n"
+        f"- NEVER refer to yourself as \"{agent.name}\" or in third-person.\n"
+        f"- NEVER analyze or describe yourself - just BE the character.\n"
+        f"- If the detective says something vague (like 'hmmm'), respond naturally: be curious, confused, or defensive.\n"
+        f"- Stay consistent with prior statements. Don't invent new facts.\n"
+        f"- Be concise and natural.\n\n"
+        f"Your knowledge:\n{knowledge_text}"
     )
+    
+    # === Build message history from memory ===
+    messages = [{"role": "system", "content": system_msg}]
+    prior_dialogue = memory.get_dialogue_for(agent.name)
+    for entry in prior_dialogue:
+        if entry['speaker'] == 'Detective':
+            messages.append({"role": "user", "content": entry['content']})
+        else:
+            messages.append({"role": "assistant", "content": entry['content']})
+    
+    # Add the current question
+    messages.append({"role": "user", "content": question})
 
-    # === Get character's response ===
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.35,
-    )
-    answer = response.choices[0].message.content.strip()
+    # === Get character's response (with retry if third-person detected) ===
+    max_attempts = 2
+    answer = ""
+    for attempt in range(max_attempts):
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.4 + (attempt * 0.2),  # Increase temp on retry
+        )
+        answer = response.choices[0].message.content.strip()
+        
+        # Check for third-person slip (character referring to themselves by name)
+        if agent.name.lower() not in answer.lower():
+            break  # Good response, no third-person
+        elif attempt < max_attempts - 1:
+            # Add correction and retry
+            messages.append({"role": "assistant", "content": answer})
+            messages.append({"role": "user", "content": "Please respond in first-person (using 'I'), not third-person."})
+    
+    # Final cleanup: remove character name prefix if present (e.g., "Ms. Banana: ...")
+    pattern = rf"^{re.escape(agent.name)}:\s*"
+    answer = re.sub(pattern, "", answer, flags=re.IGNORECASE)
 
     # === Save to memory ===
     memory.add("Detective", question)
-
-    pattern = rf"^{agent.name}:\s*"
-    answer = re.sub(pattern, "", answer, flags=re.IGNORECASE)
     memory.add(agent.name, answer)
 
     # === Ask GPT to extract structured clues (case-relevant ONLY) ===
