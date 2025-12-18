@@ -152,19 +152,37 @@ async def generate_structured_answer(
     # Attach explicit knowledge block
     knowledge = load_knowledge()
     knowledge_text = build_knowledge_text(character_name, knowledge)
+    # Detect vague inputs
+    vague_inputs = ['hmm', 'hmmm', 'hmmmm', 'hmmmmm', 'interesting', 'i see', 'ok', 'okay', 'right', 'uh huh', 'go on']
+    is_vague = question.strip().lower().rstrip('.,!?') in vague_inputs or question.strip().lower().startswith('hmm')
+    
+    vague_guidance = ""
+    if is_vague:
+        vague_guidance = (
+            "The detective said something vague. Respond naturally in character - "
+            "be curious, confused, defensive, or ask what they mean. "
+            "Do NOT analyze yourself or your alibi. Example responses: "
+            "'Is there something else you'd like to know?', "
+            "'I'm not sure what you mean by that.', "
+            "'Do you have more questions for me, Detective?'\n\n"
+        )
+    
     system = (
-        "You are the Narrative Controller ensuring consistency with the case framework. "
-        "Answer ONLY as the character. Also return STRICT JSON ops to update case state."
+        f"You ARE {character_name}. Respond in first-person ONLY (I, me, my).\n"
+        f"NEVER write '{character_name}' in your answer. NEVER analyze yourself in third-person.\n"
+        f"WRONG: \"{character_name}'s alibi seems...\"\n"
+        f"RIGHT: \"I was baking a pie, as I told you.\"\n"
+        "Also return JSON ops to update case state."
     )
     user = (
+        f"{vague_guidance}"
         f"Case context: {context}\n"
-        + f"Conversation so far (Detective <-> {character_name} only):\n{memory_text}\n\n"
-        + f"{character_name}'s provided knowledge (do NOT invent beyond this):\n{knowledge_text}\n\n"
-        + f"Character: {character_name}\nQuestion: {question}\n\n"
-        + "Return a JSON object with keys: answer (string), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
+        f"Conversation so far:\n{memory_text}\n\n"
+        f"Your background (speak about this as YOUR experience):\n{knowledge_text}\n\n"
+        f"Detective says: {question}\n\n"
+        "Return a JSON object with keys: answer (string in FIRST PERSON as the character), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
         "Include only case-relevant clues (IMPORTANT or CONTRADICTION). "
-        "Do NOT reference statements from other witnesses unless explicitly in the knowledge block above. "
-        'Example: {"answer": "...", "clues":[{"text":"She has no sister","type":"IMPORTANT"}], "evidence_ops":[], "timeline_ops":[], "alibi_ops":[]}'
+        'Example: {"answer": "I was home all evening.", "clues":[], "evidence_ops":[], "timeline_ops":[], "alibi_ops":[]}'
     )
     try:
         import openai
@@ -179,9 +197,27 @@ async def generate_structured_answer(
         )
         raw = resp.choices[0].message.content or ""
         import json
+        import re
 
         parsed = json.loads(raw)
         answer = str(parsed.get("answer", "")).strip()
+        
+        # Post-process to fix any third-person slips
+        if character_name.lower() in answer.lower():
+            print(f"[Controller] WARNING: Third-person detected in answer, fixing...")
+            answer = re.sub(rf"{re.escape(character_name)}'s", "My", answer, flags=re.IGNORECASE)
+            answer = re.sub(rf"{re.escape(character_name)} is", "I am", answer, flags=re.IGNORECASE)
+            answer = re.sub(rf"{re.escape(character_name)} was", "I was", answer, flags=re.IGNORECASE)
+            answer = re.sub(rf"{re.escape(character_name)} has", "I have", answer, flags=re.IGNORECASE)
+            answer = re.sub(rf"{re.escape(character_name)} seems", "I seem", answer, flags=re.IGNORECASE)
+            answer = re.sub(rf"{re.escape(character_name)}", "I", answer, flags=re.IGNORECASE)
+            # Fix pronouns
+            answer = re.sub(r"\bher background\b", "my background", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"\bher alibi\b", "my alibi", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"\bher statement\b", "my statement", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"\bShe seems\b", "I seem", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"\bShe was\b", "I was", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"\bShe is\b", "I am", answer, flags=re.IGNORECASE)
         # Save answer to memory (like ask_character does)
         memory.add("Detective", question)
         memory.add(character_name, answer)
