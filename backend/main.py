@@ -828,7 +828,11 @@ async def delete_room_http(code: str, request: Request):
     """Delete a room and all associated data. Admin only."""
     # Verify admin auth
     try:
-        auth_header = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+        auth_header = (
+            request.headers.get("authorization")
+            or request.headers.get("Authorization")
+            or ""
+        )
         token = ""
         if auth_header.lower().startswith("bearer "):
             token = auth_header.split(" ", 1)[1].strip()
@@ -849,10 +853,10 @@ async def delete_room_http(code: str, request: Request):
         from db import delete_room as _delete_room
     except Exception:
         _delete_room = None
-    
+
     if not _delete_room:
         raise HTTPException(status_code=500, detail="Delete function not available")
-    
+
     try:
         # Remove from in-memory ROOMS if present
         if code in ROOMS:

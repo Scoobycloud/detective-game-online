@@ -53,10 +53,12 @@ async def ask_character(agent, question: str, memory):
     is_off_topic = any(t in question.lower() for t in off_topic_triggers)
     convo_guidelines = (
         "Guidelines: Be natural, concise, and context-aware. Answer only what was asked. "
-        "If the detective's input is unclear or not a question, ask for a brief clarification in character. "
+        "If the detective's input is unclear, vague, or just a reaction (like 'hmmm', 'interesting', 'I see'), "
+        "respond naturally in character - perhaps with curiosity, defensiveness, or a follow-up question. "
         "If the input is off-topic (e.g., a joke request), politely deflect and steer back to the investigation. "
         "Do not repeat the same alibi or stock lines verbatim unless directly relevant. "
-        "Speak in first-person as the character (no stage directions or third-person narration). "
+        "CRITICAL: You ARE this character. ALWAYS speak in first-person ('I', 'me', 'my'). "
+        "NEVER analyze yourself in third-person. NEVER describe what the character might do or think - just BE them. "
         "Stay consistent with prior statements and the case context. Do not include any detective dialogue."
     )
     off_topic_preface = (
