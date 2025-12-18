@@ -82,34 +82,42 @@ async def ask_character(agent, question: str, memory):
     # === Get character's response (with retry if third-person detected) ===
     max_attempts = 3
     answer = ""
+    print(f"[QA] Asking {agent.name}: '{question}'")
     for attempt in range(max_attempts):
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",  # Better at role-play than 3.5-turbo
             messages=messages,
-            temperature=0.5 + (attempt * 0.2),  # Increase temp on retry
+            temperature=0.6 + (attempt * 0.15),
         )
         answer = response.choices[0].message.content.strip()
+        print(f"[QA] Attempt {attempt+1} response: {answer[:100]}...")
         
         # Check for third-person slip (character referring to themselves by name)
         if agent.name.lower() not in answer.lower():
+            print(f"[QA] Good response - no third-person detected")
             break  # Good response, no third-person
         elif attempt < max_attempts - 1:
             # Add stronger correction and retry
             messages.append({"role": "assistant", "content": answer})
-            messages.append({"role": "user", "content": f"That response mentioned '{agent.name}' in third-person. Respond as 'I', staying in character. Do not analyze yourself."})
-            print(f"[QA] Retry {attempt+1}: Third-person detected, retrying...")
+            messages.append({"role": "user", "content": f"STOP. You just referred to yourself as '{agent.name}'. You ARE {agent.name}. Say 'I' instead. Try again."})
+            print(f"[QA] Retry {attempt+1}: Third-person detected ('{agent.name}' in response)")
     
     # === Aggressive post-processing: Replace third-person references ===
     # If after retries we still have third-person, try to salvage it
     if agent.name.lower() in answer.lower():
-        print(f"[QA] Warning: Third-person still present after retries, applying fix...")
+        print(f"[QA] WARNING: Third-person STILL present after {max_attempts} retries!")
+        print(f"[QA] Original answer: {answer}")
         # Replace "Ms. Banana's" with "My", "Ms. Banana is" with "I am", etc.
-        answer = re.sub(rf"\b{re.escape(agent.name)}'s\b", "My", answer, flags=re.IGNORECASE)
-        answer = re.sub(rf"\b{re.escape(agent.name)} is\b", "I am", answer, flags=re.IGNORECASE)
-        answer = re.sub(rf"\b{re.escape(agent.name)} was\b", "I was", answer, flags=re.IGNORECASE)
-        answer = re.sub(rf"\b{re.escape(agent.name)} has\b", "I have", answer, flags=re.IGNORECASE)
-        answer = re.sub(rf"\b{re.escape(agent.name)} had\b", "I had", answer, flags=re.IGNORECASE)
-        answer = re.sub(rf"\b{re.escape(agent.name)}\b", "I", answer, flags=re.IGNORECASE)
+        # Don't use word boundaries - they don't work well with periods in names
+        answer = re.sub(rf"{re.escape(agent.name)}'s", "My", answer, flags=re.IGNORECASE)
+        answer = re.sub(rf"{re.escape(agent.name)} is", "I am", answer, flags=re.IGNORECASE)
+        answer = re.sub(rf"{re.escape(agent.name)} was", "I was", answer, flags=re.IGNORECASE)
+        answer = re.sub(rf"{re.escape(agent.name)} has", "I have", answer, flags=re.IGNORECASE)
+        answer = re.sub(rf"{re.escape(agent.name)} had", "I had", answer, flags=re.IGNORECASE)
+        answer = re.sub(rf"{re.escape(agent.name)} seems", "I seem", answer, flags=re.IGNORECASE)
+        answer = re.sub(rf"{re.escape(agent.name)} appears", "I appear", answer, flags=re.IGNORECASE)
+        answer = re.sub(rf"{re.escape(agent.name)}", "I", answer, flags=re.IGNORECASE)
+        print(f"[QA] Fixed answer: {answer}")
     
     # Final cleanup: remove character name prefix if present (e.g., "Ms. Banana: ...")
     pattern = rf"^{re.escape(agent.name)}:\s*"
