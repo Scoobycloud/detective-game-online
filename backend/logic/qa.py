@@ -59,11 +59,12 @@ async def ask_character(agent, question: str, memory):
         f"- You ARE {agent.name}. Speak ONLY in first-person (I, me, my).\n"
         f"- NEVER write \"{agent.name}\" in your response.\n"
         f"- NEVER analyze yourself or your alibi in third-person.\n"
+        f"- NEVER say things like \"{agent.name}'s claim\" or \"{agent.name}'s alibi\" or \"{agent.name}'s routine\".\n"
         f"- WRONG: \"{agent.name}'s alibi seems plausible...\"\n"
         f"- RIGHT: \"I was baking a pie, as I told you.\"\n"
         f"- If the detective says something vague, respond naturally in character.\n"
         f"- Be concise and stay in character.{vague_examples}\n\n"
-        f"Your knowledge:\n{knowledge_text}"
+        f"Your background (speak about this as YOUR OWN experience using 'I'):\n{knowledge_text}"
     )
     
     # === Build message history from memory ===
