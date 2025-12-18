@@ -117,6 +117,15 @@ async def ask_character(agent, question: str, memory):
         answer = re.sub(rf"{re.escape(agent.name)} seems", "I seem", answer, flags=re.IGNORECASE)
         answer = re.sub(rf"{re.escape(agent.name)} appears", "I appear", answer, flags=re.IGNORECASE)
         answer = re.sub(rf"{re.escape(agent.name)}", "I", answer, flags=re.IGNORECASE)
+        # Also fix third-person pronouns when clearly referring to the character
+        answer = re.sub(r"\bher background\b", "my background", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"\bher statement\b", "my statement", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"\bher alibi\b", "my alibi", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"\bher routine\b", "my routine", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"\bShe seems\b", "I seem", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"\bShe has\b", "I have", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"\bShe was\b", "I was", answer, flags=re.IGNORECASE)
+        answer = re.sub(r"\bShe is\b", "I am", answer, flags=re.IGNORECASE)
         print(f"[QA] Fixed answer: {answer}")
     
     # Final cleanup: remove character name prefix if present (e.g., "Ms. Banana: ...")
