@@ -237,9 +237,15 @@ async def generate_structured_answer(
         import traceback
         traceback.print_exc()
         print(f"[Controller] Falling back to answer_in_character...")
-        ans = await answer_in_character(
-            room_code, character_agent, character_name, question, memory
-        )
+        try:
+            ans = await answer_in_character(
+                room_code, character_agent, character_name, question, memory
+            )
+        except Exception as e2:
+            print(f"[Controller] FALLBACK ALSO FAILED: {type(e2).__name__}: {e2}")
+            traceback.print_exc()
+            # Ultimate fallback - return a generic response
+            ans = "I'm sorry, I didn't quite understand. Could you rephrase that?"
         return ans, {
             "clues": [],
             "evidence_ops": [],

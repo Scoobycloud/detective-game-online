@@ -1648,12 +1648,19 @@ async def ask(sid, data):
         # Route through controller with structured ops; fallback handled inside
         from logic.controller import generate_structured_answer, apply_ops
 
-        answer, ops = await generate_structured_answer(
-            room_code, agent, character, question, room["memory"]
-        )  # type: ignore
-        changes = apply_ops(
-            room_code, character, ops, room["memory"]
-        )  # persist any state changes
+        try:
+            answer, ops = await generate_structured_answer(
+                room_code, agent, character, question, room["memory"]
+            )  # type: ignore
+            changes = apply_ops(
+                room_code, character, ops, room["memory"]
+            )  # persist any state changes
+        except Exception as e:
+            log.error(f"CRITICAL ERROR in generate_structured_answer: {e}")
+            import traceback
+            traceback.print_exc()
+            answer = "I... I'm sorry, could you ask that again?"
+            changes = {}
 
     # Send answer back to detective
     if room.get("detective_sid"):
