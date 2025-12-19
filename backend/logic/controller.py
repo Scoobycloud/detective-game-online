@@ -187,6 +187,7 @@ async def generate_structured_answer(
     try:
         import openai
 
+        print(f"[Controller] Generating answer for {character_name}, question: '{question[:50]}...'")
         resp = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -196,11 +197,13 @@ async def generate_structured_answer(
             temperature=0.4,
         )
         raw = resp.choices[0].message.content or ""
+        print(f"[Controller] Raw response: {raw[:200]}...")
         import json
         import re
 
         parsed = json.loads(raw)
         answer = str(parsed.get("answer", "")).strip()
+        print(f"[Controller] Parsed answer: {answer[:100]}...")
         
         # Post-process to fix any third-person slips
         if character_name.lower() in answer.lower():
@@ -228,8 +231,12 @@ async def generate_structured_answer(
             "alibi_ops": parsed.get("alibi_ops", []) or [],
         }
         return answer, ops
-    except Exception:
+    except Exception as e:
         # fallback to plain answer + no ops
+        print(f"[Controller] ERROR in generate_structured_answer: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"[Controller] Falling back to answer_in_character...")
         ans = await answer_in_character(
             room_code, character_agent, character_name, question, memory
         )
