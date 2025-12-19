@@ -154,17 +154,29 @@ async def generate_structured_answer(
     knowledge_text = build_knowledge_text(character_name, knowledge)
     # Detect vague inputs
     vague_inputs = ['hmm', 'hmmm', 'hmmmm', 'hmmmmm', 'interesting', 'i see', 'ok', 'okay', 'right', 'uh huh', 'go on']
-    is_vague = question.strip().lower().rstrip('.,!?') in vague_inputs or question.strip().lower().startswith('hmm')
+    q_lower = question.strip().lower().rstrip('.,!?')
+    is_vague = q_lower in vague_inputs or question.strip().lower().startswith('hmm')
     
-    vague_guidance = ""
+    # Detect casual greetings
+    greeting_words = ['hi', 'hello', 'hey', 'wassup', 'whats up', "what's up", 'sup', 'yo', 'howdy', 'greetings', 'good morning', 'good evening', 'good afternoon']
+    is_greeting = any(g in q_lower for g in greeting_words) or q_lower in ['hi', 'hello', 'hey', 'yo', 'sup']
+    
+    special_guidance = ""
     if is_vague:
-        vague_guidance = (
+        special_guidance = (
             "The detective said something vague. Respond naturally in character - "
             "be curious, confused, defensive, or ask what they mean. "
             "Do NOT analyze yourself or your alibi. Example responses: "
             "'Is there something else you'd like to know?', "
             "'I'm not sure what you mean by that.', "
             "'Do you have more questions for me, Detective?'\n\n"
+        )
+    elif is_greeting:
+        special_guidance = (
+            "The detective is greeting you casually. Respond with a brief, natural greeting in character. "
+            "Do NOT immediately launch into your alibi. Just say hello back warmly or warily depending on your personality. "
+            "Example responses: 'Good evening, Detective.', 'Hello there.', 'Oh, hello. What brings you here?', "
+            "'Yes? Can I help you?'\n\n"
         )
     
     system = (
@@ -175,7 +187,7 @@ async def generate_structured_answer(
         "Also return JSON ops to update case state."
     )
     user = (
-        f"{vague_guidance}"
+        f"{special_guidance}"
         f"Case context: {context}\n"
         f"Conversation so far:\n{memory_text}\n\n"
         f"Your background (speak about this as YOUR experience):\n{knowledge_text}\n\n"
