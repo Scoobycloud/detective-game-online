@@ -152,6 +152,26 @@ async def generate_structured_answer(
     # Attach explicit knowledge block
     knowledge = load_knowledge()
     knowledge_text = build_knowledge_text(character_name, knowledge)
+    
+    # === Check knowledge_scope for forbidden topics ===
+    refused = False
+    forbidden_topics = []
+    try:
+        ok, ch = db_get_case_character(room_code, character_name)
+    except Exception:
+        ok, ch = (False, None)
+    
+    if ok and ch and isinstance(ch.get("knowledge_scope"), dict):
+        scope = ch.get("knowledge_scope", {})
+        if isinstance(scope, dict):
+            cannot = scope.get("cannot", []) or []
+            # Check if question hits a forbidden topic
+            if isinstance(cannot, list):
+                forbidden_topics = [x for x in cannot if isinstance(x, str) and x.strip()]
+                if any(topic.lower() in question.lower() for topic in forbidden_topics):
+                    refused = True
+                    print(f"[Controller] FORBIDDEN TOPIC detected for {character_name}: {question[:50]}...")
+    
     # Detect vague inputs
     vague_inputs = ['hmm', 'hmmm', 'hmmmm', 'hmmmmm', 'interesting', 'i see', 'ok', 'okay', 'right', 'uh huh', 'go on']
     q_lower = question.strip().lower().rstrip('.,!?')
@@ -162,7 +182,15 @@ async def generate_structured_answer(
     is_greeting = any(g in q_lower for g in greeting_words) or q_lower in ['hi', 'hello', 'hey', 'yo', 'sup']
     
     special_guidance = ""
-    if is_vague:
+    if refused:
+        # Forbidden topic - character must refuse to answer
+        special_guidance = (
+            "IMPORTANT: You do NOT know about the topic the detective is asking about. "
+            "You must politely refuse to answer because you genuinely don't know. "
+            "Say something like: 'I'm sorry, I don't know anything about that.', "
+            "'That's not something I can speak to.', 'I have no idea what you're referring to.'\n\n"
+        )
+    elif is_vague:
         special_guidance = (
             "The detective said something vague. Respond naturally in character - "
             "be curious, confused, defensive, or ask what they mean. "
@@ -233,6 +261,13 @@ async def generate_structured_answer(
             answer = re.sub(r"\bShe seems\b", "I seem", answer, flags=re.IGNORECASE)
             answer = re.sub(r"\bShe was\b", "I was", answer, flags=re.IGNORECASE)
             answer = re.sub(r"\bShe is\b", "I am", answer, flags=re.IGNORECASE)
+        
+        # Post-guard: if we instructed refusal, ensure the output doesn't leak forbidden info
+        if refused and forbidden_topics:
+            if any(topic.lower() in answer.lower() for topic in forbidden_topics):
+                print(f"[Controller] POST-GUARD: Answer leaked forbidden topic, replacing...")
+                answer = "I'm sorry, I don't know anything about that. It's not something I can speak to."
+        
         # Save answer to memory (like ask_character does)
         memory.add("Detective", question)
         memory.add(character_name, answer)
