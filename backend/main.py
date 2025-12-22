@@ -665,6 +665,7 @@ async def search_location_http(code: str, request: Request):
     except Exception:
         data = {}
     location = (data or {}).get("location") or ""
+    log.info(f"[SEARCH] Room={code}, Location query='{location}'")
     if not location:
         return {"error": "missing_location"}
     try:
@@ -672,14 +673,27 @@ async def search_location_http(code: str, request: Request):
             find_undiscovered_evidence_by_location as _find,
             find_any_evidence_by_location as _find_any,
             mark_evidence_discovered as _mark,
+            get_evidence_for_room as _get_all,
         )
-    except Exception:
+    except Exception as e:
+        log.error(f"[SEARCH] Import failed: {e}")
         _find = None  # type: ignore
         _mark = None  # type: ignore
+        _find_any = None  # type: ignore
+        _get_all = None  # type: ignore
     try:
+        # Debug: list all evidence for this room
+        if _get_all:
+            ok_all, all_items = _get_all(code)
+            log.info(f"[SEARCH] All evidence in room {code}: {len(all_items) if all_items else 0} items")
+            if all_items:
+                for item in all_items:
+                    log.info(f"[SEARCH]   - '{item.get('title')}' at '{item.get('location')}' (discovered={item.get('is_discovered')})")
+        
         if not _find or not _mark:
             return {"error": "db_unavailable"}
         ok, item = _find(code, location)
+        log.info(f"[SEARCH] Undiscovered search result: ok={ok}, found={item is not None}")
         if not ok:
             return {"error": "db_unavailable"}
         if not item:
@@ -688,7 +702,9 @@ async def search_location_http(code: str, request: Request):
             try:
                 if _find_any:
                     ok2, any_item = _find_any(code, location)
-            except Exception:
+                    log.info(f"[SEARCH] Fallback search result: ok={ok2}, found={any_item is not None}")
+            except Exception as e:
+                log.error(f"[SEARCH] Fallback search failed: {e}")
                 any_item = None
             if any_item:
                 return {"found": True, "evidence": any_item}
@@ -699,6 +715,7 @@ async def search_location_http(code: str, request: Request):
         await sio.emit("evidence_updated", {}, room=code)
         return {"found": True, "evidence": item}
     except Exception as e:
+        log.error(f"[SEARCH] Exception: {e}")
         return {"error": str(e)}
 
 
@@ -1273,7 +1290,7 @@ async def create_room(sid, data):
     try:
         seed = code
         summary = {
-            "victim": "Mr. Whitaker",
+            "victim": "the victim",  # Generic - AI should say "the victim" not invent names
             "murderer": "TBD",
             "motive": "Debt and resentment",
             "weapon": "Heavy candlestick",
