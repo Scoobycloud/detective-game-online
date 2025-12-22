@@ -1319,6 +1319,7 @@ async def create_room(sid, data):
 
     # Generate a lightweight case framework (deterministic by code)
     try:
+        log.info(f"[SEED] Starting case framework for {code}")
         seed = code
         summary = {
             "victim": "the victim",  # Generic - AI should say "the victim" not invent names
@@ -1328,6 +1329,7 @@ async def create_room(sid, data):
             "location": "Whitestone Manor - Study",
             "time": "~9:00 PM",
         }
+        log.info(f"[SEED] Upserting case for {code}")
         db_upsert_case(code, status="investigation", seed=seed, summary=summary)
         # seed notable characters (names here align with default roster; roles illustrative)
         db_upsert_case_character(
@@ -1395,7 +1397,8 @@ async def create_room(sid, data):
         )
         # seed undiscovered evidence example
         # Seed sample evidence with placeholder media paths under /evidence
-        db_insert_evidence(
+        log.info(f"[SEED] Inserting evidence for {code}")
+        ok1, err1 = db_insert_evidence(
             code,
             title="syringe",
             ev_type="item",
@@ -1405,7 +1408,8 @@ async def create_room(sid, data):
             thumbnail_url="/evidence/syringe_thumb.png",
             media_url="/evidence/syringe.png",
         )
-        db_insert_evidence(
+        log.info(f"[SEED] syringe: ok={ok1}, err={err1}")
+        ok2, err2 = db_insert_evidence(
             code,
             title="park footage",
             ev_type="video",
@@ -1415,7 +1419,8 @@ async def create_room(sid, data):
             thumbnail_url="/evidence/park_footage_thumb.png",
             media_url="/evidence/park_footage.mp4",
         )
-        db_insert_evidence(
+        log.info(f"[SEED] park footage: ok={ok2}, err={err2}")
+        ok3, err3 = db_insert_evidence(
             code,
             title="hanky",
             ev_type="item",
@@ -1425,6 +1430,7 @@ async def create_room(sid, data):
             thumbnail_url="/evidence/hanky_thumb.png",
             media_url="/evidence/hanky.png",
         )
+        log.info(f"[SEED] hanky: ok={ok3}, err={err3}")
         # seed basic alibis
         db_insert_alibi(
             code,
