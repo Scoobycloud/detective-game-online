@@ -719,6 +719,37 @@ async def search_location_http(code: str, request: Request):
         return {"error": str(e)}
 
 
+@app.post("/rooms/{code}/seed_evidence")
+async def seed_evidence_http(code: str):
+    """Seed default evidence for a room that doesn't have any."""
+    try:
+        from db import get_evidence_for_room as _get_evidence, insert_evidence as _insert
+    except Exception:
+        return {"error": "db_unavailable"}
+    
+    # Check if room already has evidence
+    ok, existing = _get_evidence(code)
+    if ok and existing and len(existing) > 0:
+        return {"seeded": False, "message": f"Room already has {len(existing)} evidence items", "count": len(existing)}
+    
+    # Seed the default evidence
+    try:
+        _insert(code, title="syringe", ev_type="item", location="Bathroom cabinet",
+                notes="Trace residue on needle", is_discovered=False,
+                thumbnail_url="/evidence/syringe_thumb.png", media_url="/evidence/syringe.png")
+        _insert(code, title="park footage", ev_type="video", location="North Park gate",
+                notes="Figure entering gate at 21:03", is_discovered=False,
+                thumbnail_url="/evidence/park_footage_thumb.png", media_url="/evidence/park_footage.mp4")
+        _insert(code, title="hanky", ev_type="item", location="Study",
+                notes="Monogrammed initial; faint stain", is_discovered=False,
+                thumbnail_url="/evidence/hanky_thumb.png", media_url="/evidence/hanky.png")
+        log.info(f"[SEED] Seeded 3 evidence items for room {code}")
+        return {"seeded": True, "count": 3}
+    except Exception as e:
+        log.error(f"[SEED] Failed to seed evidence for {code}: {e}")
+        return {"error": str(e)}
+
+
 @app.get("/characters/{name}/profile")
 async def get_character_profile_http(name: str):
     try:
