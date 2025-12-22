@@ -6,6 +6,11 @@
       "I have excellent recall for domestic routines - bins day, post times, all of it.",
       "I keep my lace curtains cracked open. I like to know what's happening on my street."
     ],
+    "location_hints": [
+      "I noticed someone rummaging around the Study fireplace the other day. Seemed suspicious.",
+      "The bathroom cabinet upstairs has been left open recently - most unusual.",
+      "I heard Dr. Blackwood mention something about the North Park gate late one evening."
+    ],
     "about": {
       "Mr. Holloway": [
         "Keeps a strict gardening routine; notes neighborhood comings and goings in a pocket notebook.",
@@ -18,7 +23,7 @@
       "Dr. Adrian Blackwood": [
         "Respected surgeon; maintains a polished public image.",
         "Leaves early most mornings; returns late; always impeccably dressed.",
-        "I saw him once putting a large sack in the boot of his car , around midnight."
+        "I saw him once putting a large sack in the boot of his car, around midnight."
       ]
     }
   },
@@ -27,6 +32,11 @@
       "Retired civil servant; values routine and order.",
       "Claims he was pruning hydrangeas from 8:30 to 9:30 as every Thursday.",
       "Keeps timestamps on garden tasks in his notebook."
+    ],
+    "location_hints": [
+      "I saw someone near the Study late that night. The curtains were drawn but I could see shadows.",
+      "Tommy was fussing with the bathroom cabinet - claimed a leak, but I'm not so sure.",
+      "If you want answers, check the North Park gate area. I've seen odd comings and goings there."
     ],
     "about": {
       "Ms. Banana": [
@@ -49,6 +59,11 @@
       "Was mopping ground floor hallway around 9:00.",
       "Knows which flats have sticky locks and loose latches."
     ],
+    "location_hints": [
+      "I clean everywhere in this building. The bathroom cabinet had some strange items in it recently.",
+      "Someone's been messing about in the Study - I found ash on the floor near the fireplace.",
+      "I've got keys to everything. If you want to know about hidden spots, just ask."
+    ],
     "about": {
       "Ms. Banana": [
         "Always peeking through the curtains; knows what's going on.",
@@ -69,6 +84,11 @@
       "Respected surgeon; calm exterior; protective of reputation.",
       "Keeps a tidy schedule; dislikes delays."
     ],
+    "location_hints": [
+      "I sometimes walk through North Park gate on my evening constitutional. Quiet area.",
+      "The Study is where the victim spent most of their time. You might find something there.",
+      "I prefer not to speculate on where evidence might be found. That's your job, Detective."
+    ],
     "about": {
       "Ms. Banana": [
         "Long-time neighbor of the victim; tends to gossip.",
@@ -85,4 +105,3 @@
     }
   }
 }
-

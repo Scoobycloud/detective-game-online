@@ -17,6 +17,7 @@ def load_knowledge():
 def build_knowledge_text(character_name: str, knowledge: dict) -> str:
     data = knowledge.get(character_name, {})
     background = data.get("background", [])
+    location_hints = data.get("location_hints", [])
     about = data.get("about", {})
 
     lines = []
@@ -24,6 +25,10 @@ def build_knowledge_text(character_name: str, knowledge: dict) -> str:
         lines.append("Background knowledge:")
         for item in background:
             lines.append(f"- {item}")
+    if location_hints:
+        lines.append("Things you've noticed about places (share naturally if the detective asks about locations or evidence):")
+        for hint in location_hints:
+            lines.append(f"- {hint}")
     if about:
         lines.append("Knowledge about other witnesses:")
         for other, facts in about.items():
