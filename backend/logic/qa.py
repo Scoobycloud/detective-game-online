@@ -43,6 +43,10 @@ async def ask_character(agent, question: str, memory):
     knowledge = load_knowledge()
     knowledge_text = build_knowledge_text(agent.name, knowledge)
     
+    # Build list of valid character names from knowledge (to prevent AI hallucinating names)
+    valid_characters = list(knowledge.keys()) if knowledge else []
+    valid_names_str = ", ".join(valid_characters) if valid_characters else "Unknown"
+    
     # Detect vague/reaction inputs that tend to confuse the AI
     vague_inputs = ['hmm', 'hmmm', 'hmmmm', 'hmmmmm', 'interesting', 'i see', 'ok', 'okay', 'right', 'uh huh', 'go on']
     is_vague = question.strip().lower().rstrip('.,!?') in vague_inputs or question.strip().lower().startswith('hmm')
@@ -67,6 +71,8 @@ async def ask_character(agent, question: str, memory):
         f"- NEVER say things like \"{agent.name}'s claim\" or \"{agent.name}'s alibi\" or \"{agent.name}'s routine\".\n"
         f"- WRONG: \"{agent.name}'s alibi seems plausible...\"\n"
         f"- RIGHT: \"I was baking a pie, as I told you.\"\n"
+        f"- The ONLY people in this case are: {valid_names_str}. Do NOT mention any other names.\n"
+        f"- Do NOT invent victims, witnesses, or suspects. If referring to a victim, say 'the victim'.\n"
         f"- If the detective says something vague, respond naturally in character.\n"
         f"- Be concise and stay in character.{vague_examples}\n\n"
         f"Your background (speak about this as YOUR OWN experience using 'I'):\n{knowledge_text}"

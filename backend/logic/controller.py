@@ -152,6 +152,10 @@ async def generate_structured_answer(
     knowledge = load_knowledge()
     knowledge_text = build_knowledge_text(character_name, knowledge)
     
+    # Build list of valid character names from knowledge (to prevent AI hallucinating names)
+    valid_characters = list(knowledge.keys()) if knowledge else []
+    valid_names_str = ", ".join(valid_characters) if valid_characters else "Unknown"
+    
     # === Check knowledge_scope for forbidden topics ===
     refused = False
     forbidden_topics = []
@@ -211,6 +215,9 @@ async def generate_structured_answer(
         f"NEVER write '{character_name}' in your answer. NEVER analyze yourself in third-person.\n"
         f"WRONG: \"{character_name}'s alibi seems...\"\n"
         f"RIGHT: \"I was baking a pie, as I told you.\"\n\n"
+        f"IMPORTANT: The ONLY people in this case are: {valid_names_str}.\n"
+        f"Do NOT mention any other names. Do NOT invent victims, witnesses, or suspects.\n"
+        f"If you need to refer to a victim, say 'the victim' - do not make up names.\n\n"
         f"Case context: {context}\n"
         f"Your background:\n{knowledge_text}\n\n"
         f"{special_guidance}"
