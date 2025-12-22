@@ -1401,7 +1401,7 @@ async def create_room(sid, data):
             ev_type="item",
             location="Bathroom cabinet",
             notes="Trace residue on needle",
-            is_discovered=True,  # Temporarily set to true for testing
+            is_discovered=False,  # Hidden until detective searches
             thumbnail_url="/evidence/syringe_thumb.png",
             media_url="/evidence/syringe.png",
         )
@@ -1411,7 +1411,7 @@ async def create_room(sid, data):
             ev_type="video",
             location="North Park gate",
             notes="Figure entering gate at 21:03",
-            is_discovered=True,  # Temporarily set to true for testing
+            is_discovered=False,  # Hidden until detective searches
             thumbnail_url="/evidence/park_footage_thumb.png",
             media_url="/evidence/park_footage.mp4",
         )
@@ -1421,7 +1421,7 @@ async def create_room(sid, data):
             ev_type="item",
             location="Study",
             notes="Monogrammed initial; faint stain",
-            is_discovered=True,  # Temporarily set to true for testing
+            is_discovered=False,  # Hidden until detective searches
             thumbnail_url="/evidence/hanky_thumb.png",
             media_url="/evidence/hanky.png",
         )
