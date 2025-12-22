@@ -7,9 +7,9 @@
       "I keep my lace curtains cracked open. I like to know what's happening on my street."
     ],
     "location_hints": [
-      "I noticed someone rummaging around the Study fireplace the other day. Seemed suspicious.",
-      "The bathroom cabinet upstairs has been left open recently - most unusual.",
-      "I heard Dr. Blackwood mention something about the North Park gate late one evening."
+      "I saw someone acting suspiciously in the Study. You should search there.",
+      "The bathroom cabinet has been left open lately - most unusual. Have you looked there?",
+      "I heard Dr. Blackwood mention the North Park gate late one evening. Might be worth investigating."
     ],
     "about": {
       "Mr. Holloway": [
@@ -34,9 +34,9 @@
       "Keeps timestamps on garden tasks in his notebook."
     ],
     "location_hints": [
-      "I saw someone near the Study late that night. The curtains were drawn but I could see shadows.",
+      "I saw someone near the Study late that night. You should search there.",
       "Tommy was fussing with the bathroom cabinet - claimed a leak, but I'm not so sure.",
-      "If you want answers, check the North Park gate area. I've seen odd comings and goings there."
+      "Check near the North Park gate. I've seen odd comings and goings there."
     ],
     "about": {
       "Ms. Banana": [
@@ -60,9 +60,9 @@
       "Knows which flats have sticky locks and loose latches."
     ],
     "location_hints": [
-      "I clean everywhere in this building. The bathroom cabinet had some strange items in it recently.",
-      "Someone's been messing about in the Study - I found ash on the floor near the fireplace.",
-      "I've got keys to everything. If you want to know about hidden spots, just ask."
+      "I clean everywhere in this building. Check the bathroom cabinet - I found strange items there recently.",
+      "The Study had ash on the floor the other day. Something happened there.",
+      "I've got keys to everything. The North Park gate area sees late night visitors, if you catch my drift."
     ],
     "about": {
       "Ms. Banana": [

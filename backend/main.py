@@ -686,7 +686,7 @@ async def search_location_http(code: str, request: Request):
             # fallback: if any match exists (already discovered), return it so UI can open modal
             any_item = None
             try:
-                if "_find_any" in locals() and _find_any:
+                if _find_any:
                     ok2, any_item = _find_any(code, location)
             except Exception:
                 any_item = None
