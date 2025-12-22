@@ -148,7 +148,6 @@ async def generate_structured_answer(
     context = _build_case_context_text(room_code)
     # Limit dialogue to Detective <-> this character only
     dialogue = memory.get_dialogue_for(character_name)
-    memory_text = "\n".join(f"{m['speaker']}: {m['content']}" for m in dialogue)
     # Attach explicit knowledge block
     knowledge = load_knowledge()
     knowledge_text = build_knowledge_text(character_name, knowledge)
@@ -211,29 +210,33 @@ async def generate_structured_answer(
         f"You ARE {character_name}. Respond in first-person ONLY (I, me, my).\n"
         f"NEVER write '{character_name}' in your answer. NEVER analyze yourself in third-person.\n"
         f"WRONG: \"{character_name}'s alibi seems...\"\n"
-        f"RIGHT: \"I was baking a pie, as I told you.\"\n"
-        "Also return JSON ops to update case state."
-    )
-    user = (
-        f"{special_guidance}"
+        f"RIGHT: \"I was baking a pie, as I told you.\"\n\n"
         f"Case context: {context}\n"
-        f"Conversation so far:\n{memory_text}\n\n"
-        f"Your background (speak about this as YOUR experience):\n{knowledge_text}\n\n"
-        f"Detective says: {question}\n\n"
-        "Return a JSON object with keys: answer (string in FIRST PERSON as the character), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
-        "Include only case-relevant clues (IMPORTANT or CONTRADICTION). "
+        f"Your background:\n{knowledge_text}\n\n"
+        f"{special_guidance}"
+        "Return a JSON object with keys: answer (string), clues (array), evidence_ops (array), timeline_ops (array), alibi_ops (array). "
         'Example: {"answer": "I was home all evening.", "clues":[], "evidence_ops":[], "timeline_ops":[], "alibi_ops":[]}'
     )
+    
+    # Build proper message history (like ChatGPT) for context
+    messages = [{"role": "system", "content": system}]
+    for entry in dialogue:
+        if entry['speaker'] == 'Detective':
+            messages.append({"role": "user", "content": entry['content']})
+        else:
+            # Previous responses were JSON, extract just the answer for context
+            messages.append({"role": "assistant", "content": entry['content']})
+    
+    # Add the current question
+    messages.append({"role": "user", "content": question})
+    
     try:
         import openai
 
-        print(f"[Controller] Generating answer for {character_name}, question: '{question[:50]}...'")
+        print(f"[Controller] Generating answer for {character_name}, question: '{question[:50]}...' (history: {len(dialogue)} turns)")
         resp = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            messages=messages,
             temperature=0.4,
         )
         raw = resp.choices[0].message.content or ""
