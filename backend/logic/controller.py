@@ -180,9 +180,17 @@ async def generate_structured_answer(
     q_lower = question.strip().lower().rstrip('.,!?')
     is_vague = q_lower in vague_inputs or question.strip().lower().startswith('hmm')
     
-    # Detect casual greetings
-    greeting_words = ['hi', 'hello', 'hey', 'wassup', 'whats up', "what's up", 'sup', 'yo', 'howdy', 'greetings', 'good morning', 'good evening', 'good afternoon']
-    is_greeting = any(g in q_lower for g in greeting_words) or q_lower in ['hi', 'hello', 'hey', 'yo', 'sup']
+    # Detect casual greetings - ONLY for short, pure greetings (not questions)
+    # If message contains question words, it's NOT a greeting
+    question_words = ['what', 'where', 'when', 'who', 'why', 'how', 'did', 'do', 'does', 'are', 'is', 'were', 'was', 'tell', 'explain', '?']
+    has_question = any(qw in q_lower for qw in question_words)
+    
+    greeting_phrases = ['hi', 'hello', 'hey', 'wassup', 'whats up', "what's up", 'sup', 'yo', 'howdy', 'greetings', 
+                        'good morning', 'good evening', 'good afternoon', 'hi there', 'hello there', 'hey there']
+    # Only a greeting if: short message, starts with greeting phrase, and NOT a question
+    is_greeting = False
+    if not has_question and len(q_lower.split()) <= 6:  # Short messages only
+        is_greeting = any(q_lower.startswith(g) or q_lower == g for g in greeting_phrases)
     
     special_guidance = ""
     if refused:
@@ -215,6 +223,8 @@ async def generate_structured_answer(
         f"NEVER write '{character_name}' in your answer. NEVER analyze yourself in third-person.\n"
         f"WRONG: \"{character_name}'s alibi seems...\"\n"
         f"RIGHT: \"I was baking a pie, as I told you.\"\n\n"
+        f"CRITICAL: Always answer the detective's question directly. Do NOT just greet them if they ask a question.\n"
+        f"If they ask 'what were you doing last night?', ANSWER the question using your background knowledge.\n\n"
         f"IMPORTANT: The ONLY people in this case are: {valid_names_str}.\n"
         f"Do NOT mention any other names. Do NOT invent victims, witnesses, or suspects.\n"
         f"If you need to refer to a victim, say 'the victim' - do not make up names.\n\n"
