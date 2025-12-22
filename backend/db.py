@@ -660,21 +660,28 @@ def get_timeline_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
 def find_undiscovered_evidence_by_location(
     room_code: str, location_query: str
 ) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Find undiscovered evidence matching any word in the search query."""
     if not supabase:
         return False, None
     try:
+        # Get all undiscovered evidence for the room
         res = (
             supabase.table("evidence")
-            .select("id,title,type,location,is_discovered,notes")
+            .select("id,title,type,location,is_discovered,notes,thumbnail_url,media_url")
             .eq("room_code", room_code)
             .eq("is_discovered", False)
-            .ilike("location", f"%{location_query}%")
             .order("created_at", desc=False)
-            .limit(1)
             .execute()
         )
         rows = getattr(res, "data", []) or []
-        return True, rows[0] if rows else None
+        
+        # Match if ANY word in the query matches the location
+        query_words = [w.lower().strip() for w in location_query.split() if w.strip()]
+        for row in rows:
+            loc = (row.get("location") or "").lower()
+            if any(word in loc for word in query_words):
+                return True, row
+        return True, None
     except Exception as e:
         print("DB find_undiscovered_evidence_by_location warning:", e)
         return False, None
@@ -683,23 +690,29 @@ def find_undiscovered_evidence_by_location(
 def find_any_evidence_by_location(
     room_code: str, location_query: str
 ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-    """Find any evidence (discovered or not) by location substring match."""
+    """Find any evidence (discovered or not) matching any word in the search query."""
     if not supabase:
         return False, None
     try:
+        # Get all evidence for the room
         res = (
             supabase.table("evidence")
             .select(
                 "id,title,type,location,is_discovered,notes,thumbnail_url,media_url"
             )
             .eq("room_code", room_code)
-            .ilike("location", f"%{location_query}%")
             .order("created_at", desc=False)
-            .limit(1)
             .execute()
         )
         rows = getattr(res, "data", []) or []
-        return True, rows[0] if rows else None
+        
+        # Match if ANY word in the query matches the location
+        query_words = [w.lower().strip() for w in location_query.split() if w.strip()]
+        for row in rows:
+            loc = (row.get("location") or "").lower()
+            if any(word in loc for word in query_words):
+                return True, row
+        return True, None
     except Exception as e:
         print("DB find_any_evidence_by_location warning:", e)
         return False, None
