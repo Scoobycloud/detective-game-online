@@ -57,8 +57,8 @@
       ]
     },
     "knowledge_scope": {
-      "allowed": ["maintenance issues"],
-      "cannot": ["exact time at boiler"]
+      "allowed": ["gardening routines", "neighborhood observations"],
+      "cannot": ["what others were doing inside their homes"]
     }
   },
   "Tommy the Janitor": {
