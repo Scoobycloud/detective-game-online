@@ -533,6 +533,53 @@ async def set_room_character_scope(code: str, name: str, request: Request):
         raise HTTPException(status_code=500, detail="Failed to update knowledge_scope")
 
 
+@app.get("/rooms/{code}/characters/{name}/knowledge")
+async def get_room_character_knowledge(code: str, name: str):
+    """Get the knowledge (background, location_hints, about) for a character."""
+    try:
+        ok, ch = db_get_case_character(code, name)
+        if not ok:
+            raise HTTPException(status_code=500, detail="Database error")
+        if not ch:
+            raise HTTPException(status_code=404, detail="Not found")
+        return {"ok": True, "knowledge": ch.get("knowledge") or {}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"GET /rooms/{code}/characters/{name}/knowledge failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch knowledge")
+
+
+@app.post("/rooms/{code}/characters/{name}/knowledge")
+async def set_room_character_knowledge(code: str, name: str, request: Request):
+    """Update the knowledge (background, location_hints, about) for a character."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    knowledge = body.get("knowledge")
+    if not isinstance(knowledge, dict):
+        raise HTTPException(status_code=400, detail="knowledge must be an object")
+    
+    # Import the update function
+    try:
+        from db import update_case_character_knowledge as db_update_knowledge
+    except Exception:
+        raise HTTPException(status_code=500, detail="Database not available")
+    
+    try:
+        ok, err = db_update_knowledge(code, name, knowledge)
+        if not ok:
+            raise HTTPException(status_code=500, detail=err or "Update failed")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"POST /rooms/{code}/characters/{name}/knowledge failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update knowledge")
+
+
 """
 Room model (in-memory, persisted optionally to DB later):
 ROOMS = {
@@ -1331,6 +1378,11 @@ async def create_room(sid, data):
         }
         log.info(f"[SEED] Upserting case for {code}")
         db_upsert_case(code, status="investigation", seed=seed, summary=summary)
+        
+        # Load default knowledge from knowledge.json
+        from logic.qa import load_knowledge
+        default_knowledge = load_knowledge()
+        
         # seed notable characters (names here align with default roster; roles illustrative)
         db_upsert_case_character(
             code,
@@ -1341,6 +1393,7 @@ async def create_room(sid, data):
                 "cannot": ["technical boiler details"],
                 "allowed": ["social observations"],
             },
+            knowledge=default_knowledge.get("Ms. Banana"),
         )
         db_upsert_case_character(
             code,
@@ -1355,6 +1408,7 @@ async def create_room(sid, data):
                 "cannot": ["exact time at boiler"],
                 "allowed": ["maintenance issues"],
             },
+            knowledge=default_knowledge.get("Mr. Holloway"),
         )
         db_upsert_case_character(
             code,
@@ -1368,6 +1422,7 @@ async def create_room(sid, data):
                 "cannot": ["exact times"],
                 "allowed": ["places he cleaned"],
             },
+            knowledge=default_knowledge.get("Tommy the Janitor"),
         )
         db_upsert_case_character(
             code,
@@ -1378,6 +1433,7 @@ async def create_room(sid, data):
                 "cannot": ["house staff routines"],
                 "allowed": ["medical observations"],
             },
+            knowledge=default_knowledge.get("Dr. Adrian Blackwood"),
         )
         # first timeline marker
         db_insert_timeline_event(

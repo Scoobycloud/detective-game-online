@@ -14,8 +14,20 @@ def load_knowledge():
         print("Failed to load knowledge.json:", e)
     return {}
 
-def build_knowledge_text(character_name: str, knowledge: dict) -> str:
-    data = knowledge.get(character_name, {})
+def build_knowledge_text(character_name: str, knowledge: dict, char_knowledge: dict = None) -> str:
+    """Build knowledge text for a character.
+    
+    Args:
+        character_name: Name of the character
+        knowledge: Full knowledge dict (all characters) - used as fallback
+        char_knowledge: Direct character knowledge dict from database (preferred)
+    """
+    # Prefer database knowledge if provided, otherwise fall back to file
+    if char_knowledge and isinstance(char_knowledge, dict):
+        data = char_knowledge
+    else:
+        data = knowledge.get(character_name, {})
+    
     background = data.get("background", [])
     location_hints = data.get("location_hints", [])
     about = data.get("about", {})

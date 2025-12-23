@@ -148,9 +148,19 @@ async def generate_structured_answer(
     context = _build_case_context_text(room_code)
     # Limit dialogue to Detective <-> this character only
     dialogue = memory.get_dialogue_for(character_name)
-    # Attach explicit knowledge block
+    
+    # === Fetch character from database (includes knowledge) ===
+    db_knowledge = None
+    try:
+        ok, ch = db_get_case_character(room_code, character_name)
+        if ok and ch and isinstance(ch.get("knowledge"), dict):
+            db_knowledge = ch.get("knowledge")
+    except Exception:
+        ok, ch = (False, None)
+    
+    # Attach explicit knowledge block (prefer database, fall back to file)
     knowledge = load_knowledge()
-    knowledge_text = build_knowledge_text(character_name, knowledge)
+    knowledge_text = build_knowledge_text(character_name, knowledge, char_knowledge=db_knowledge)
     
     # Build list of valid character names from knowledge (to prevent AI hallucinating names)
     valid_characters = list(knowledge.keys()) if knowledge else []
@@ -159,10 +169,6 @@ async def generate_structured_answer(
     # === Check knowledge_scope for forbidden topics ===
     refused = False
     forbidden_topics = []
-    try:
-        ok, ch = db_get_case_character(room_code, character_name)
-    except Exception:
-        ok, ch = (False, None)
     
     if ok and ch and isinstance(ch.get("knowledge_scope"), dict):
         scope = ch.get("knowledge_scope", {})

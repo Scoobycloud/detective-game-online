@@ -53,7 +53,7 @@ def delete_room(code: str) -> Tuple[bool, Optional[str]]:
         # Delete from all related tables (order matters for foreign keys)
         tables = [
             "transcript",
-            "clues", 
+            "clues",
             "evidence",
             "timeline_events",
             "relationships",
@@ -176,7 +176,13 @@ def get_user_admin(user_id: str) -> Tuple[bool, Optional[bool]]:
     if not supabase:
         return False, None
     try:
-        res = supabase.table("users").select("is_admin").eq("user_id", user_id).limit(1).execute()
+        res = (
+            supabase.table("users")
+            .select("is_admin")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
         rows = getattr(res, "data", []) or []
         if not rows:
             return True, None
@@ -415,21 +421,23 @@ def upsert_case_character(
     role: str,
     personality: Optional[Dict[str, Any]] = None,
     knowledge_scope: Optional[Dict[str, Any]] = None,
+    knowledge: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, Optional[str]]:
     if not supabase:
         return False, "supabase_not_configured"
     try:
+        payload = {
+            "room_code": room_code,
+            "name": name,
+            "role": role,
+            "personality": personality,
+            "knowledge_scope": knowledge_scope,
+        }
+        if knowledge is not None:
+            payload["knowledge"] = knowledge
         res = (
             supabase.table("case_characters")
-            .upsert(
-                {
-                    "room_code": room_code,
-                    "name": name,
-                    "role": role,
-                    "personality": personality,
-                    "knowledge_scope": knowledge_scope,
-                }
-            )
+            .upsert(payload)
             .execute()
         )
         return True, None
@@ -588,7 +596,7 @@ def get_case_character(
     try:
         res = (
             supabase.table("case_characters")
-            .select("name, role, personality, knowledge_scope")
+            .select("name, role, personality, knowledge_scope, knowledge")
             .eq("room_code", room_code)
             .eq("name", name)
             .limit(1)
@@ -599,6 +607,26 @@ def get_case_character(
     except Exception as e:
         print("DB get_case_character warning:", e)
         return False, None
+
+
+def update_case_character_knowledge(
+    room_code: str, name: str, knowledge: Dict[str, Any]
+) -> Tuple[bool, Optional[str]]:
+    """Update the knowledge (background, location_hints, about) for a character."""
+    if not supabase:
+        return False, "supabase_not_configured"
+    try:
+        _ = (
+            supabase.table("case_characters")
+            .update({"knowledge": knowledge})
+            .eq("room_code", room_code)
+            .eq("name", name)
+            .execute()
+        )
+        return True, None
+    except Exception as e:
+        print("DB update_case_character_knowledge warning:", e)
+        return False, str(e)
 
 
 def update_case_character_scope(
@@ -667,14 +695,16 @@ def find_undiscovered_evidence_by_location(
         # Get all undiscovered evidence for the room
         res = (
             supabase.table("evidence")
-            .select("id,title,type,location,is_discovered,notes,thumbnail_url,media_url")
+            .select(
+                "id,title,type,location,is_discovered,notes,thumbnail_url,media_url"
+            )
             .eq("room_code", room_code)
             .eq("is_discovered", False)
             .order("created_at", desc=False)
             .execute()
         )
         rows = getattr(res, "data", []) or []
-        
+
         # Match if ANY word in the query matches the location
         query_words = [w.lower().strip() for w in location_query.split() if w.strip()]
         for row in rows:
@@ -705,7 +735,7 @@ def find_any_evidence_by_location(
             .execute()
         )
         rows = getattr(res, "data", []) or []
-        
+
         # Match if ANY word in the query matches the location
         query_words = [w.lower().strip() for w in location_query.split() if w.strip()]
         for row in rows:
