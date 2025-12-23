@@ -1383,16 +1383,12 @@ async def create_room(sid, data):
         from logic.qa import load_knowledge
         default_knowledge = load_knowledge()
         
-        # seed notable characters (names here align with default roster; roles illustrative)
+        # seed notable characters - knowledge includes knowledge_scope now
         db_upsert_case_character(
             code,
             name="Ms. Banana",
             role="witness",
             personality={"traits": ["poised", "observant"], "honesty": "honest"},
-            knowledge_scope={
-                "cannot": ["technical boiler details"],
-                "allowed": ["social observations"],
-            },
             knowledge=default_knowledge.get("Ms. Banana"),
         )
         db_upsert_case_character(
@@ -1404,10 +1400,6 @@ async def create_room(sid, data):
                 "honesty": "deceptive",
                 "lie_about": ["debts", "argument with victim"],
             },
-            knowledge_scope={
-                "cannot": ["exact time at boiler"],
-                "allowed": ["maintenance issues"],
-            },
             knowledge=default_knowledge.get("Mr. Holloway"),
         )
         db_upsert_case_character(
@@ -1418,10 +1410,6 @@ async def create_room(sid, data):
                 "traits": ["nervous", "eager-to-please"],
                 "honesty": "forgetful",
             },
-            knowledge_scope={
-                "cannot": ["exact times"],
-                "allowed": ["places he cleaned"],
-            },
             knowledge=default_knowledge.get("Tommy the Janitor"),
         )
         db_upsert_case_character(
@@ -1429,10 +1417,6 @@ async def create_room(sid, data):
             name="Dr. Adrian Blackwood",
             role="suspect",
             personality={"traits": ["calm", "clinical"], "honesty": "honest"},
-            knowledge_scope={
-                "cannot": ["house staff routines"],
-                "allowed": ["medical observations"],
-            },
             knowledge=default_knowledge.get("Dr. Adrian Blackwood"),
         )
         # first timeline marker

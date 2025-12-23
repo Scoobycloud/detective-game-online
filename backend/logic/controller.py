@@ -167,19 +167,25 @@ async def generate_structured_answer(
     valid_names_str = ", ".join(valid_characters) if valid_characters else "Unknown"
     
     # === Check knowledge_scope for forbidden topics ===
+    # knowledge_scope is now inside the knowledge JSON
     refused = False
     forbidden_topics = []
+    scope = None
     
-    if ok and ch and isinstance(ch.get("knowledge_scope"), dict):
-        scope = ch.get("knowledge_scope", {})
-        if isinstance(scope, dict):
-            cannot = scope.get("cannot", []) or []
-            # Check if question hits a forbidden topic
-            if isinstance(cannot, list):
-                forbidden_topics = [x for x in cannot if isinstance(x, str) and x.strip()]
-                if any(topic.lower() in question.lower() for topic in forbidden_topics):
-                    refused = True
-                    print(f"[Controller] FORBIDDEN TOPIC detected for {character_name}: {question[:50]}...")
+    # First try to get from db_knowledge (unified JSON)
+    if db_knowledge and isinstance(db_knowledge.get("knowledge_scope"), dict):
+        scope = db_knowledge.get("knowledge_scope")
+    # Fall back to separate column (legacy)
+    elif ok and ch and isinstance(ch.get("knowledge_scope"), dict):
+        scope = ch.get("knowledge_scope")
+    
+    if scope and isinstance(scope, dict):
+        cannot = scope.get("cannot", []) or []
+        if isinstance(cannot, list):
+            forbidden_topics = [x for x in cannot if isinstance(x, str) and x.strip()]
+            if any(topic.lower() in question.lower() for topic in forbidden_topics):
+                refused = True
+                print(f"[Controller] FORBIDDEN TOPIC detected for {character_name}: {question[:50]}...")
     
     # Detect vague inputs
     vague_inputs = ['hmm', 'hmmm', 'hmmmm', 'hmmmmm', 'interesting', 'i see', 'ok', 'okay', 'right', 'uh huh', 'go on']

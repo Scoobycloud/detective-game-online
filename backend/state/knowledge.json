@@ -25,6 +25,10 @@
         "Leaves early most mornings; returns late; always impeccably dressed.",
         "I saw him once putting a large sack in the boot of his car, around midnight."
       ]
+    },
+    "knowledge_scope": {
+      "allowed": ["social observations"],
+      "cannot": ["technical boiler details"]
     }
   },
   "Mr. Holloway": {
@@ -51,6 +55,10 @@
         "Professional demeanor; polite in public.",
         "Drives a dark saloon; parks facing east."
       ]
+    },
+    "knowledge_scope": {
+      "allowed": ["maintenance issues"],
+      "cannot": ["exact time at boiler"]
     }
   },
   "Tommy the Janitor": {
@@ -77,6 +85,10 @@
         "Keeps his head down; few words outside the hospital.",
         "Gets parcels marked 'fragile instruments' twice a month."
       ]
+    },
+    "knowledge_scope": {
+      "allowed": ["places he cleaned"],
+      "cannot": ["exact times"]
     }
   },
   "Dr. Adrian Blackwood": {
@@ -102,6 +114,10 @@
         "Present in common areas; hears more than people assume.",
         "Knows which residents skip paying maintenance on time."
       ]
+    },
+    "knowledge_scope": {
+      "allowed": ["medical observations"],
+      "cannot": ["house staff routines"]
     }
   }
 }

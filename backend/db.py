@@ -435,11 +435,7 @@ def upsert_case_character(
         }
         if knowledge is not None:
             payload["knowledge"] = knowledge
-        res = (
-            supabase.table("case_characters")
-            .upsert(payload)
-            .execute()
-        )
+        res = supabase.table("case_characters").upsert(payload).execute()
         return True, None
     except Exception as e:
         print("DB upsert_case_character warning:", e)
