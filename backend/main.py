@@ -1425,10 +1425,12 @@ async def create_room(sid, data):
             ("20:00", "before", "Victim seen in Study", "Victim was working in the Study, appeared agitated according to witnesses."),
             ("20:30", "before", "Mr. Holloway begins gardening", "Mr. Holloway claims he started pruning hydrangeas in his garden."),
             ("20:45", "before", "Victim last seen alive", "Last confirmed sighting of the victim near the hallway."),
+            ("20:45", "before", "Dr. Blackwood leaves for walk", "Dr. Adrian Blackwood claims he left for his evening walk through North Park."),
             # DURING - the critical window
             ("21:00", "during", "Ms. Banana baking pie", "Ms. Banana claims she was in her kitchen baking a pie, couldn't leave the oven."),
             ("21:00", "during", "Tommy mopping hallway", "Tommy the Janitor claims he was mopping the ground floor hallway."),
             ("21:00", "during", "⚠️ Loud noise reported", "Neighbors reported hearing a loud thud or crash around this time."),
+            ("21:15", "during", "Dr. Blackwood returns from walk", "Dr. Adrian Blackwood claims he returned from his constitutional around this time."),
             ("21:30", "during", "Mr. Holloway finishes gardening", "Mr. Holloway claims he finished pruning at 9:30 PM as per his usual routine."),
             # AFTER - discovery
             ("22:15", "after", "🔴 Body discovered", "The victim's body was discovered. Police were called to the scene."),
@@ -1481,34 +1483,34 @@ async def create_room(sid, data):
             media_url="/evidence/hanky.png",
         )
         log.info(f"[SEED] hanky: ok={ok3}, err={err3}")
-        # seed basic alibis
+        # Seed alibis aligned with timeline events
         db_insert_alibi(
             code,
             character="Ms. Banana",
-            timeframe="20:45–21:15",
-            account="Preparing tea in the sunroom; saw no one enter the study",
+            timeframe="21:00",
+            account="Baking a pie in my kitchen. I couldn't leave the oven unattended.",
             credibility_score=0.6,
         )
         db_insert_alibi(
             code,
             character="Mr. Holloway",
-            timeframe="20:50–21:10",
-            account="Checking boiler in the basement",
-            credibility_score=0.4,
+            timeframe="20:30–21:30",
+            account="Pruning hydrangeas in my garden, as I do every Thursday evening.",
+            credibility_score=0.7,
         )
         db_insert_alibi(
             code,
             character="Tommy the Janitor",
-            timeframe="20:40–21:20",
-            account="Cleaning corridor near the north wing",
+            timeframe="21:00",
+            account="Mopping the ground floor hallway. Standard evening shift.",
             credibility_score=0.5,
         )
         db_insert_alibi(
             code,
             character="Dr. Adrian Blackwood",
-            timeframe="20:55–21:05",
-            account="On a phone call in the courtyard",
-            credibility_score=0.7,
+            timeframe="20:45–21:15",
+            account="Taking my evening constitutional through North Park. I often walk that route.",
+            credibility_score=0.4,
         )
     except Exception as e:
         log.info(f"Case framework generation failed: {e}")
