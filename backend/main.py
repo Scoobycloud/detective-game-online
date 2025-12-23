@@ -1419,13 +1419,72 @@ async def create_room(sid, data):
             personality={"traits": ["calm", "clinical"], "honesty": "honest"},
             knowledge=default_knowledge.get("Dr. Adrian Blackwood"),
         )
-        # first timeline marker
+        # Seed rich timeline events
+        # BEFORE - victim's last known movements
+        db_insert_timeline_event(
+            code,
+            tstamp="20:00",
+            phase="before",
+            label="Victim seen in Study",
+            details="Victim was working in the Study, appeared agitated according to witnesses.",
+        )
+        db_insert_timeline_event(
+            code,
+            tstamp="20:30",
+            phase="before",
+            label="Mr. Holloway begins gardening",
+            details="Mr. Holloway claims he started pruning hydrangeas in his garden.",
+        )
+        db_insert_timeline_event(
+            code,
+            tstamp="20:45",
+            phase="before",
+            label="Victim last seen alive",
+            details="Last confirmed sighting of the victim near the hallway.",
+        )
+        # DURING - the critical window
         db_insert_timeline_event(
             code,
             tstamp="21:00",
             phase="during",
-            label="Murder timeframe",
-            details="Victim last seen alive near 8:45 PM; sound reported near 9:00 PM",
+            label="Ms. Banana baking pie",
+            details="Ms. Banana claims she was in her kitchen baking a pie, couldn't leave the oven.",
+        )
+        db_insert_timeline_event(
+            code,
+            tstamp="21:00",
+            phase="during",
+            label="Tommy mopping hallway",
+            details="Tommy the Janitor claims he was mopping the ground floor hallway.",
+        )
+        db_insert_timeline_event(
+            code,
+            tstamp="21:00",
+            phase="during",
+            label="⚠️ Loud noise reported",
+            details="Neighbors reported hearing a loud thud or crash around this time.",
+        )
+        db_insert_timeline_event(
+            code,
+            tstamp="21:30",
+            phase="during",
+            label="Mr. Holloway finishes gardening",
+            details="Mr. Holloway claims he finished pruning at 9:30 PM as per his usual routine.",
+        )
+        # AFTER - discovery
+        db_insert_timeline_event(
+            code,
+            tstamp="22:15",
+            phase="after",
+            label="🔴 Body discovered",
+            details="The victim's body was discovered. Police were called to the scene.",
+        )
+        db_insert_timeline_event(
+            code,
+            tstamp="22:45",
+            phase="after",
+            label="Police arrive",
+            details="Officers secured the scene and began taking initial statements.",
         )
         # seed relationship example
         db_insert_relationship(
