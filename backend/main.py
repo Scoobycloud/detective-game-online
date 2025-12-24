@@ -1279,6 +1279,7 @@ async def schedule_initial_clues(room_code: str):
     plan = CLUE_RELEASE_PLAN
     clues = await generate_story_clues(room_code, len(plan))
     now = datetime.now(timezone.utc)
+    log.info(f"[CLUES] schedule_initial_clues room={room_code} plan={plan} generated={len(clues)}")
     for idx, clue in enumerate(clues[: len(plan)]):
         release_at = now + timedelta(seconds=plan[idx])
         stage_hint = "investigation" if idx < 2 else "interrogation"
@@ -1294,6 +1295,9 @@ async def schedule_initial_clues(room_code: str):
                 auto_generated=True,
                 stage=stage_hint,
             )
+            log.info(
+                f"[CLUES] scheduled clue idx={idx} room={room_code} release_at={release_at.isoformat()} text={clue.get('text','')[:80]}"
+            )
         except Exception as e:
             log.info(f"schedule_initial_clues failed to insert for {room_code}: {e}")
 
@@ -1307,6 +1311,8 @@ async def ensure_clues_released(room_code: str) -> list[Dict[str, Any]]:
     ok, released_items = db_release_due_clues(room_code, now_iso)
     log.info(f"[CLUES] released_ok={ok} count={len(released_items or [])}")
     if not ok or not released_items:
+        if not ok:
+            log.info(f"[CLUES] release_due_clues returned ok=False for room={room_code}")
         return []
     room = ROOMS.get(room_code)
     if room:

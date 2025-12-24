@@ -365,20 +365,21 @@ def get_clues_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
 def release_due_clues(room_code: str, now_iso: str) -> Tuple[bool, List[Dict[str, Any]]]:
     """Mark any scheduled clues as released if their release_at is due."""
     if not supabase:
+        print("[DB] release_due_clues: supabase not configured")
         return False, []
     try:
         print(f"[DB] release_due_clues check room={room_code} now={now_iso}")
         # First find due clues
         due = (
             supabase.table("clues")
-            .select("id")
+            .select("id,release_at,released,room_code")
             .eq("room_code", room_code)
             .eq("released", False)
             .lte("release_at", now_iso)
             .execute()
         )
         due_rows = getattr(due, "data", []) or []
-        print(f"[DB] due_rows={len(due_rows)}")
+        print(f"[DB] due_rows={len(due_rows)} rows={due_rows}")
         if not due_rows:
             return True, []
         ids = [r.get("id") for r in due_rows if r.get("id")]
@@ -394,9 +395,13 @@ def release_due_clues(room_code: str, now_iso: str) -> Tuple[bool, List[Dict[str
             .execute()
         )
         data = getattr(res, "data", []) or []
+        print(f"[DB] released rows={len(data)}")
         return True, data  # type: ignore
     except Exception as e:
+        import traceback
+
         print("DB release_due_clues warning:", e)
+        traceback.print_exc()
         return False, []
 
 
