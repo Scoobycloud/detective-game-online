@@ -385,17 +385,19 @@ def release_due_clues(room_code: str, now_iso: str) -> Tuple[bool, List[Dict[str
         ids = [r.get("id") for r in due_rows if r.get("id")]
         if not ids:
             return True, []
+        # Mark released
+        _ = supabase.table("clues").update({"released": True}).in_("id", ids).execute()
+        # Fetch the released rows for return/logging
         res = (
             supabase.table("clues")
-            .update({"released": True})
-            .in_("id", ids)
             .select(
                 "id,text,type,source,timestamp,created_at,character_name,release_at,released,auto_generated,stage"
             )
+            .in_("id", ids)
             .execute()
         )
         data = getattr(res, "data", []) or []
-        print(f"[DB] released rows={len(data)}")
+        print(f"[DB] released rows={len(data)} ids={ids}")
         return True, data  # type: ignore
     except Exception as e:
         import traceback
