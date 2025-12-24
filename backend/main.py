@@ -453,6 +453,13 @@ async def submit_accusation_http(code: str, request: Request):
             existing_summary = dict(cur_summary)
             murderer = (cur_summary or {}).get("murderer")
 
+    # Fallback: if summary is missing murderer but the room has a human murderer set
+    if not murderer:
+        room = ROOMS.get(code)
+        if room and room.get("human_character"):
+            murderer = room.get("human_character")
+            log.info(f"[ACCUSE] Fallback murderer from room state: {murderer}")
+
     # Build accusation record
     now_iso = datetime.now(timezone.utc).isoformat()
     verdict = None
@@ -460,6 +467,9 @@ async def submit_accusation_http(code: str, request: Request):
         verdict = (
             "correct" if murderer.strip().lower() == suspect.lower() else "incorrect"
         )
+    log.info(
+        f"[ACCUSE] room={code} suspect='{suspect}' murderer='{murderer}' verdict={verdict}"
+    )
     accusation = {"suspect": suspect, "rationale": rationale, "at": now_iso}
     if verdict:
         accusation["verdict"] = verdict
