@@ -1,7 +1,6 @@
 # backend/main.py
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from agents.profiles import (
     create_bellamy,
@@ -10,14 +9,14 @@ from agents.profiles import (
     create_perpetrator,
 )
 from logic.memory import Memory
-from logic.qa import ask_character, extract_clues_from_reply
-from logic.controller import answer_in_character, postprocess_human_answer
+from logic.qa import ask_character, load_knowledge
+from logic.controller import postprocess_human_answer, _build_case_context_text
 import os
 from dotenv import load_dotenv
 import logging
 import openai
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # === NEW: sockets bits ===
@@ -55,6 +54,7 @@ try:
         add_transcript_entry as db_add_transcript_entry,
         add_clue as db_add_clue,
         get_clues_for_room as db_get_clues_for_room,
+        release_due_clues as db_release_due_clues,
         get_character_profile as db_get_character_profile,
         upsert_case as db_upsert_case,
         upsert_case_character as db_upsert_case_character,
@@ -69,6 +69,8 @@ try:
         update_case_status as db_update_case_status,
         ensure_user as db_ensure_user,
         get_user_admin as db_get_user_admin,
+        get_evidence_for_room as db_get_evidence_for_room,
+        get_timeline_for_room as db_get_timeline_for_room,
     )
 except Exception:
     from db import (
@@ -77,6 +79,7 @@ except Exception:
         add_transcript_entry as db_add_transcript_entry,
         add_clue as db_add_clue,
         get_clues_for_room as db_get_clues_for_room,
+        release_due_clues as db_release_due_clues,
         get_character_profile as db_get_character_profile,
         upsert_case as db_upsert_case,
         upsert_case_character as db_upsert_case_character,
@@ -91,6 +94,8 @@ except Exception:
         update_case_status as db_update_case_status,
         ensure_user as db_ensure_user,
         get_user_admin as db_get_user_admin,
+        get_evidence_for_room as db_get_evidence_for_room,
+        get_timeline_for_room as db_get_timeline_for_room,
     )
 
     try:
@@ -819,6 +824,7 @@ async def get_clues():
 
 @app.get("/rooms/{code}/clues")
 async def get_room_clues(code: str):
+    await ensure_clues_released(code)
     # Prefer DB if available, fall back to in-memory
     try:
         if "db_get_clues_for_room" in globals() and db_get_clues_for_room:
@@ -1101,6 +1107,185 @@ STAGE_DURATIONS = {
     "accusation": 5 * 60,  # 5 mins
 }
 STAGE_TASKS: Dict[str, asyncio.Task] = {}
+CLUE_RELEASE_PLAN = [90, 270, 390, 540, 720]  # seconds from game start
+
+
+def _fallback_clues() -> list[Dict[str, Any]]:
+    """Deterministic, case-aligned clues if AI generation is unavailable."""
+    return [
+        {
+            "text": "Security footage shows a figure entering the North Park gate at 21:03 carrying something bulky.",
+            "type": "IMPORTANT",
+            "source": "scene",
+        },
+        {
+            "text": "The kitchen counter is dusted with fresh flour at 21:00, suggesting active baking.",
+            "type": "IMPORTANT",
+            "source": "scene",
+        },
+        {
+            "text": "A monogrammed handkerchief with a faint stain lies near the Study desk.",
+            "type": "IMPORTANT",
+            "source": "scene",
+        },
+        {
+            "text": "Wet soil footprints by the Study window match gardening shoes recently used.",
+            "type": "IMPORTANT",
+            "source": "scene",
+        },
+        {
+            "text": "The janitor’s log notes a boiler room check at ~21:05 and a brief heat spike in the manor.",
+            "type": "IMPORTANT",
+            "source": "scene",
+        },
+    ]
+
+
+async def generate_story_clues(room_code: str, count: int) -> list[Dict[str, Any]]:
+    """Ask the model for a small set of story-coherent clues, fallback if unavailable."""
+    count = max(1, count)
+    try:
+        context = _build_case_context_text(room_code)
+    except Exception:
+        context = ""
+
+    timeline_txt = ""
+    try:
+        ok_tl, timeline = db_get_timeline_for_room(room_code)
+        if ok_tl and timeline:
+            timeline_txt = "\n".join(
+                [
+                    f"{t.get('phase','?')} @ {t.get('tstamp','?')}: {t.get('label','')}"
+                    for t in timeline
+                ]
+            )
+    except Exception:
+        timeline_txt = ""
+
+    evidence_txt = ""
+    try:
+        ok_ev, evidence = db_get_evidence_for_room(room_code)
+        if ok_ev and evidence:
+            evidence_txt = "\n".join(
+                [
+                    f"{e.get('title','item')} at {e.get('location')}: {e.get('notes','')}"
+                    for e in evidence
+                ]
+            )
+    except Exception:
+        evidence_txt = ""
+
+    valid_names = []
+    try:
+        knowledge = load_knowledge()
+        valid_names = list(knowledge.keys())
+    except Exception:
+        valid_names = []
+
+    if not openai.api_key:
+        return _fallback_clues()[:count]
+
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are the narrative AI for a murder-mystery game. "
+                    "Produce a JSON array of short clues that fit the existing case, timeline, and evidence. "
+                    "Each clue must be a single sentence, avoid spoilers, and use ONLY known characters. "
+                    "Fields: text (string), type ('IMPORTANT' or 'CONTRADICTION'), source (character name or 'scene'), optional character_name."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "context": context,
+                        "timeline": timeline_txt,
+                        "evidence": evidence_txt,
+                        "known_characters": valid_names,
+                        "desired_count": count,
+                    }
+                ),
+            },
+        ]
+        loop = asyncio.get_event_loop()
+        resp = await loop.run_in_executor(
+            None,
+            lambda: openai.ChatCompletion.create(
+                model="gpt-3.5-turbo", temperature=0.4, messages=messages
+            ),
+        )
+        raw = resp.choices[0].message.content or "[]"
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            return _fallback_clues()[:count]
+        clean = []
+        for item in parsed[:count]:
+            if not isinstance(item, dict):
+                continue
+            clean.append(
+                {
+                    "text": str(item.get("text", "")).strip(),
+                    "type": str(item.get("type", "IMPORTANT")).upper(),
+                    "source": item.get("source") or "scene",
+                    "character_name": item.get("character_name"),
+                }
+            )
+        return clean or _fallback_clues()[:count]
+    except Exception as e:
+        log.info(f"AI clue generation failed: {e}")
+        return _fallback_clues()[:count]
+
+
+async def schedule_initial_clues(room_code: str):
+    """Pre-generate a batch of clues and schedule their release."""
+    plan = CLUE_RELEASE_PLAN
+    clues = await generate_story_clues(room_code, len(plan))
+    now = datetime.now(timezone.utc)
+    for idx, clue in enumerate(clues[: len(plan)]):
+        release_at = now + timedelta(seconds=plan[idx])
+        stage_hint = "investigation" if idx < 2 else "interrogation"
+        try:
+            db_add_clue(
+                room_code,
+                text=clue.get("text", ""),
+                clue_type=clue.get("type", "IMPORTANT"),
+                source=clue.get("source", "scene"),
+                character_name=clue.get("character_name"),
+                release_at=release_at.isoformat(),
+                released=False,
+                auto_generated=True,
+                stage=stage_hint,
+            )
+        except Exception as e:
+            log.info(f"schedule_initial_clues failed to insert for {room_code}: {e}")
+
+
+async def ensure_clues_released(room_code: str) -> list[Dict[str, Any]]:
+    """Promote any due clues and push them to memory."""
+    if not db_release_due_clues:
+        return []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    ok, released_items = db_release_due_clues(room_code, now_iso)
+    if not ok or not released_items:
+        return []
+    room = ROOMS.get(room_code)
+    if room:
+        mem = room.get("memory")
+        if mem:
+            for c in released_items:
+                mem.add_clue(
+                    c.get("text", ""),
+                    clue_type=c.get("type", "IMPORTANT"),
+                    source=c.get("source", "scene"),
+                    timestamp=c.get("timestamp"),
+                )
+    try:
+        await sio.emit("clues_updated", {}, room=room_code)
+    except Exception:
+        pass
+    return released_items
 
 
 def get_stage_durations(room_code: str) -> Dict[str, int]:
@@ -1171,15 +1356,22 @@ async def _run_stage_timer(
             await emit_stage_update(room_code)
 
             end_ts = room["stage_end"]
+            last_release_check = 0
             while True:
                 room = ROOMS.get(room_code)
                 if not room:
                     break
+                now = time.time()
+                if now - last_release_check > 5:
+                    try:
+                        await ensure_clues_released(room_code)
+                    except Exception as e:
+                        log.info(f"clue release tick failed for {room_code}: {e}")
+                    last_release_check = now
                 if room.get("stage_paused"):
                     await asyncio.sleep(1)
                     end_ts = room.get("stage_end", end_ts)
                     continue
-                now = time.time()
                 if now >= end_ts:
                     break
                 await asyncio.sleep(1)
@@ -1512,6 +1704,7 @@ async def create_room(sid, data):
             account="Taking my evening constitutional through North Park. I often walk that route.",
             credibility_score=0.4,
         )
+        asyncio.create_task(schedule_initial_clues(code))
     except Exception as e:
         log.info(f"Case framework generation failed: {e}")
     log.info(f"ROOM CREATED {code}")
@@ -1707,6 +1900,8 @@ async def ask(sid, data):
             }
         }
     )
+
+    await ensure_clues_released(room_code)
 
     # Record question in transcript (best-effort)
     try:

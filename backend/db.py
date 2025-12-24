@@ -302,6 +302,10 @@ def add_clue(
     source: Optional[str] = None,
     timestamp: Optional[str] = None,
     character_name: Optional[str] = None,
+    release_at: Optional[str] = None,
+    released: Optional[bool] = None,
+    auto_generated: Optional[bool] = None,
+    stage: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """Insert a clue row if the table exists.
     Expected schema: clues(id uuid pk, room_code text, text text, type text, source text, timestamp text, created_at timestamp default now())
@@ -319,6 +323,14 @@ def add_clue(
             payload["timestamp"] = timestamp
         if character_name:
             payload["character_name"] = character_name
+        if release_at:
+            payload["release_at"] = release_at
+        if released is not None:
+            payload["released"] = bool(released)
+        if auto_generated is not None:
+            payload["auto_generated"] = bool(auto_generated)
+        if stage:
+            payload["stage"] = stage
         res = supabase.table("clues").insert(payload).execute()
         data = getattr(res, "data", None)
         return True, f"inserted:{len(data) if data is not None else 'unknown'}"
@@ -334,8 +346,12 @@ def get_clues_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
     try:
         res = (
             supabase.table("clues")
-            .select("text,type,source,timestamp,created_at,character_name")
+            .select(
+                "text,type,source,timestamp,created_at,character_name,release_at,released,auto_generated,stage"
+            )
             .eq("room_code", room_code)
+            .eq("released", True)
+            .order("release_at", desc=False)
             .order("created_at", desc=False)
             .execute()
         )
@@ -343,6 +359,29 @@ def get_clues_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
         return True, data  # type: ignore
     except Exception as e:
         print("DB get_clues_for_room warning:", e)
+        return False, []
+
+
+def release_due_clues(room_code: str, now_iso: str) -> Tuple[bool, List[Dict[str, Any]]]:
+    """Mark any scheduled clues as released if their release_at is due."""
+    if not supabase:
+        return False, []
+    try:
+        res = (
+            supabase.table("clues")
+            .update({"released": True})
+            .eq("room_code", room_code)
+            .eq("released", False)
+            .lte("release_at", now_iso)
+            .select(
+                "text,type,source,timestamp,created_at,character_name,release_at,released,auto_generated,stage"
+            )
+            .execute()
+        )
+        data = getattr(res, "data", []) or []
+        return True, data  # type: ignore
+    except Exception as e:
+        print("DB release_due_clues warning:", e)
         return False, []
 
 
