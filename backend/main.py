@@ -562,17 +562,17 @@ async def set_room_character_knowledge(code: str, name: str, request: Request):
         body = await request.json()
     except Exception:
         body = {}
-    
+
     knowledge = body.get("knowledge")
     if not isinstance(knowledge, dict):
         raise HTTPException(status_code=400, detail="knowledge must be an object")
-    
+
     # Import the update function
     try:
         from db import update_case_character_knowledge as db_update_knowledge
     except Exception:
         raise HTTPException(status_code=500, detail="Database not available")
-    
+
     try:
         ok, err = db_update_knowledge(code, name, knowledge)
         if not ok:
@@ -737,15 +737,21 @@ async def search_location_http(code: str, request: Request):
         # Debug: list all evidence for this room
         if _get_all:
             ok_all, all_items = _get_all(code)
-            log.info(f"[SEARCH] All evidence in room {code}: {len(all_items) if all_items else 0} items")
+            log.info(
+                f"[SEARCH] All evidence in room {code}: {len(all_items) if all_items else 0} items"
+            )
             if all_items:
                 for item in all_items:
-                    log.info(f"[SEARCH]   - '{item.get('title')}' at '{item.get('location')}' (discovered={item.get('is_discovered')})")
-        
+                    log.info(
+                        f"[SEARCH]   - '{item.get('title')}' at '{item.get('location')}' (discovered={item.get('is_discovered')})"
+                    )
+
         if not _find or not _mark:
             return {"error": "db_unavailable"}
         ok, item = _find(code, location)
-        log.info(f"[SEARCH] Undiscovered search result: ok={ok}, found={item is not None}")
+        log.info(
+            f"[SEARCH] Undiscovered search result: ok={ok}, found={item is not None}"
+        )
         if not ok:
             return {"error": "db_unavailable"}
         if not item:
@@ -754,7 +760,9 @@ async def search_location_http(code: str, request: Request):
             try:
                 if _find_any:
                     ok2, any_item = _find_any(code, location)
-                    log.info(f"[SEARCH] Fallback search result: ok={ok2}, found={any_item is not None}")
+                    log.info(
+                        f"[SEARCH] Fallback search result: ok={ok2}, found={any_item is not None}"
+                    )
             except Exception as e:
                 log.error(f"[SEARCH] Fallback search failed: {e}")
                 any_item = None
@@ -775,26 +783,54 @@ async def search_location_http(code: str, request: Request):
 async def seed_evidence_http(code: str):
     """Seed default evidence for a room that doesn't have any."""
     try:
-        from db import get_evidence_for_room as _get_evidence, insert_evidence as _insert
+        from db import (
+            get_evidence_for_room as _get_evidence,
+            insert_evidence as _insert,
+        )
     except Exception:
         return {"error": "db_unavailable"}
-    
+
     # Check if room already has evidence
     ok, existing = _get_evidence(code)
     if ok and existing and len(existing) > 0:
-        return {"seeded": False, "message": f"Room already has {len(existing)} evidence items", "count": len(existing)}
-    
+        return {
+            "seeded": False,
+            "message": f"Room already has {len(existing)} evidence items",
+            "count": len(existing),
+        }
+
     # Seed the default evidence
     try:
-        _insert(code, title="syringe", ev_type="item", location="Bathroom cabinet",
-                notes="Trace residue on needle", is_discovered=False,
-                thumbnail_url="/evidence/syringe_thumb.png", media_url="/evidence/syringe.png")
-        _insert(code, title="park footage", ev_type="video", location="North Park gate",
-                notes="Figure entering gate at 21:03", is_discovered=False,
-                thumbnail_url="/evidence/park_footage_thumb.png", media_url="/evidence/park_footage.mp4")
-        _insert(code, title="hanky", ev_type="item", location="Study",
-                notes="Monogrammed initial; faint stain", is_discovered=False,
-                thumbnail_url="/evidence/hanky_thumb.png", media_url="/evidence/hanky.png")
+        _insert(
+            code,
+            title="syringe",
+            ev_type="item",
+            location="Bathroom cabinet",
+            notes="Trace residue on needle",
+            is_discovered=False,
+            thumbnail_url="/evidence/syringe_thumb.png",
+            media_url="/evidence/syringe.png",
+        )
+        _insert(
+            code,
+            title="park footage",
+            ev_type="video",
+            location="North Park gate",
+            notes="Figure entering gate at 21:03",
+            is_discovered=False,
+            thumbnail_url="/evidence/park_footage_thumb.png",
+            media_url="/evidence/park_footage.mp4",
+        )
+        _insert(
+            code,
+            title="hanky",
+            ev_type="item",
+            location="Study",
+            notes="Monogrammed initial; faint stain",
+            is_discovered=False,
+            thumbnail_url="/evidence/hanky_thumb.png",
+            media_url="/evidence/hanky.png",
+        )
         log.info(f"[SEED] Seeded 3 evidence items for room {code}")
         return {"seeded": True, "count": 3}
     except Exception as e:
@@ -1155,7 +1191,7 @@ async def generate_story_clues(room_code: str, count: int) -> list[Dict[str, Any
         if ok_tl and timeline:
             timeline_txt = "\n".join(
                 [
-                    f"{t.get('phase','?')} @ {t.get('tstamp','?')}: {t.get('label','')}"
+                    f"{t.get('phase', '?')} @ {t.get('tstamp', '?')}: {t.get('label', '')}"
                     for t in timeline
                 ]
             )
@@ -1168,7 +1204,7 @@ async def generate_story_clues(room_code: str, count: int) -> list[Dict[str, Any
         if ok_ev and evidence:
             evidence_txt = "\n".join(
                 [
-                    f"{e.get('title','item')} at {e.get('location')}: {e.get('notes','')}"
+                    f"{e.get('title', 'item')} at {e.get('location')}: {e.get('notes', '')}"
                     for e in evidence
                 ]
             )
@@ -1267,7 +1303,9 @@ async def ensure_clues_released(room_code: str) -> list[Dict[str, Any]]:
     if not db_release_due_clues:
         return []
     now_iso = datetime.now(timezone.utc).isoformat()
+    log.info(f"[CLUES] ensure_clues_released room={room_code} now={now_iso}")
     ok, released_items = db_release_due_clues(room_code, now_iso)
+    log.info(f"[CLUES] released_ok={ok} count={len(released_items or [])}")
     if not ok or not released_items:
         return []
     room = ROOMS.get(room_code)
@@ -1570,11 +1608,12 @@ async def create_room(sid, data):
         }
         log.info(f"[SEED] Upserting case for {code}")
         db_upsert_case(code, status="investigation", seed=seed, summary=summary)
-        
+
         # Load default knowledge from knowledge.json
         from logic.qa import load_knowledge
+
         default_knowledge = load_knowledge()
-        
+
         # seed notable characters - knowledge includes knowledge_scope now
         db_upsert_case_character(
             code,
@@ -1614,22 +1653,79 @@ async def create_room(sid, data):
         # Seed rich timeline events with logging
         timeline_events = [
             # BEFORE - victim's last known movements
-            ("20:00", "before", "Victim seen in Study", "Victim was working in the Study, appeared agitated according to witnesses."),
-            ("20:30", "before", "Mr. Holloway begins gardening", "Mr. Holloway claims he started pruning hydrangeas in his garden."),
-            ("20:45", "before", "Victim last seen alive", "Last confirmed sighting of the victim near the hallway."),
-            ("20:45", "before", "Dr. Blackwood leaves for walk", "Dr. Adrian Blackwood claims he left for his evening walk through North Park."),
+            (
+                "20:00",
+                "before",
+                "Victim seen in Study",
+                "Victim was working in the Study, appeared agitated according to witnesses.",
+            ),
+            (
+                "20:30",
+                "before",
+                "Mr. Holloway begins gardening",
+                "Mr. Holloway claims he started pruning hydrangeas in his garden.",
+            ),
+            (
+                "20:45",
+                "before",
+                "Victim last seen alive",
+                "Last confirmed sighting of the victim near the hallway.",
+            ),
+            (
+                "20:45",
+                "before",
+                "Dr. Blackwood leaves for walk",
+                "Dr. Adrian Blackwood claims he left for his evening walk through North Park.",
+            ),
             # DURING - the critical window
-            ("21:00", "during", "Ms. Banana baking pie", "Ms. Banana claims she was in her kitchen baking a pie, couldn't leave the oven."),
-            ("21:00", "during", "Tommy mopping hallway", "Tommy the Janitor claims he was mopping the ground floor hallway."),
-            ("21:00", "during", "⚠️ Loud noise reported", "Neighbors reported hearing a loud thud or crash around this time."),
-            ("21:15", "during", "Dr. Blackwood returns from walk", "Dr. Adrian Blackwood claims he returned from his constitutional around this time."),
-            ("21:30", "during", "Mr. Holloway finishes gardening", "Mr. Holloway claims he finished pruning at 9:30 PM as per his usual routine."),
+            (
+                "21:00",
+                "during",
+                "Ms. Banana baking pie",
+                "Ms. Banana claims she was in her kitchen baking a pie, couldn't leave the oven.",
+            ),
+            (
+                "21:00",
+                "during",
+                "Tommy mopping hallway",
+                "Tommy the Janitor claims he was mopping the ground floor hallway.",
+            ),
+            (
+                "21:00",
+                "during",
+                "⚠️ Loud noise reported",
+                "Neighbors reported hearing a loud thud or crash around this time.",
+            ),
+            (
+                "21:15",
+                "during",
+                "Dr. Blackwood returns from walk",
+                "Dr. Adrian Blackwood claims he returned from his constitutional around this time.",
+            ),
+            (
+                "21:30",
+                "during",
+                "Mr. Holloway finishes gardening",
+                "Mr. Holloway claims he finished pruning at 9:30 PM as per his usual routine.",
+            ),
             # AFTER - discovery
-            ("22:15", "after", "🔴 Body discovered", "The victim's body was discovered. Police were called to the scene."),
-            ("22:45", "after", "Police arrive", "Officers secured the scene and began taking initial statements."),
+            (
+                "22:15",
+                "after",
+                "🔴 Body discovered",
+                "The victim's body was discovered. Police were called to the scene.",
+            ),
+            (
+                "22:45",
+                "after",
+                "Police arrive",
+                "Officers secured the scene and began taking initial statements.",
+            ),
         ]
         for tstamp, phase, label, details in timeline_events:
-            ok, err = db_insert_timeline_event(code, tstamp=tstamp, phase=phase, label=label, details=details)
+            ok, err = db_insert_timeline_event(
+                code, tstamp=tstamp, phase=phase, label=label, details=details
+            )
             log.info(f"[TIMELINE] {phase} '{label}': ok={ok}, err={err}")
         # seed relationship example
         db_insert_relationship(
@@ -1959,6 +2055,7 @@ async def ask(sid, data):
         except Exception as e:
             log.error(f"CRITICAL ERROR in generate_structured_answer: {e}")
             import traceback
+
             traceback.print_exc()
             answer = "I... I'm sorry, could you ask that again?"
             changes = {}

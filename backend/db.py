@@ -367,6 +367,7 @@ def release_due_clues(room_code: str, now_iso: str) -> Tuple[bool, List[Dict[str
     if not supabase:
         return False, []
     try:
+        print(f"[DB] release_due_clues check room={room_code} now={now_iso}")
         # First find due clues
         due = (
             supabase.table("clues")
@@ -377,6 +378,7 @@ def release_due_clues(room_code: str, now_iso: str) -> Tuple[bool, List[Dict[str
             .execute()
         )
         due_rows = getattr(due, "data", []) or []
+        print(f"[DB] due_rows={len(due_rows)}")
         if not due_rows:
             return True, []
         ids = [r.get("id") for r in due_rows if r.get("id")]
