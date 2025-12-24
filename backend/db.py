@@ -347,7 +347,7 @@ def get_clues_for_room(room_code: str) -> Tuple[bool, List[Dict[str, Any]]]:
         res = (
             supabase.table("clues")
             .select(
-                "text,type,source,timestamp,created_at,character_name,release_at,released,auto_generated,stage"
+                "id,text,type,source,timestamp,created_at,character_name,release_at,released,auto_generated,stage"
             )
             .eq("room_code", room_code)
             .eq("released", True)
@@ -367,14 +367,27 @@ def release_due_clues(room_code: str, now_iso: str) -> Tuple[bool, List[Dict[str
     if not supabase:
         return False, []
     try:
-        res = (
+        # First find due clues
+        due = (
             supabase.table("clues")
-            .update({"released": True})
+            .select("id")
             .eq("room_code", room_code)
             .eq("released", False)
             .lte("release_at", now_iso)
+            .execute()
+        )
+        due_rows = getattr(due, "data", []) or []
+        if not due_rows:
+            return True, []
+        ids = [r.get("id") for r in due_rows if r.get("id")]
+        if not ids:
+            return True, []
+        res = (
+            supabase.table("clues")
+            .update({"released": True})
+            .in_("id", ids)
             .select(
-                "text,type,source,timestamp,created_at,character_name,release_at,released,auto_generated,stage"
+                "id,text,type,source,timestamp,created_at,character_name,release_at,released,auto_generated,stage"
             )
             .execute()
         )
